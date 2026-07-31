@@ -229,6 +229,7 @@
           $('#stSyncOn', a.el).addEventListener('click', function () {
             this.classList.toggle('on'); readCfg();
           });
+          Sync.setStatus(c.status);
           const toggleMode = () => {
             const m = $('#stSyncMode', a.el).value;
             $('#syncJsonbin', a.el).style.display = m === 'jsonbin' ? '' : 'none';
@@ -241,9 +242,9 @@
             try { const r = await Sync.test(); setStatus(r.ok ? ('连接正常' + (r.hasData ? '，云端已有数据' : '，云端为空')) : '连接失败'); K.Toast('连接正常 ✦'); }
             catch (e) { setStatus('连接失败：' + (e.message || e)); K.Toast('连接失败：' + (e.message || e)); }
           });
-          $('#stNow', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } Sync.once(); setStatus('同步中…'); });
-          $('#stPush', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } Sync.forcePush(); setStatus('上传中…'); });
-          $('#stPull', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } Sync.forcePull(); setStatus('下载中…'); });
+          $('#stNow', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } if (Sync.syncing) { K.Toast('同步已在进行中，请稍候'); return; } Sync.once(); });
+          $('#stPush', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } if (Sync.syncing) { K.Toast('同步已在进行中，请稍候'); return; } Sync.forcePush(); });
+          $('#stPull', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } if (Sync.syncing) { K.Toast('同步已在进行中，请稍候'); return; } Sync.forcePull(); });
 
           $('#stReset', a.el).addEventListener('click', () => {
             K.Sheet.confirm('清空全部数据', '此操作不可恢复，将删除所有打卡、记账、阅读与复盘记录。建议先导出备份。', () => {
