@@ -168,7 +168,7 @@
         '<button class="btn full ghost sm" style="margin-top:8px" id="stSleep">前往早睡模块自定义</button></div>' +
         '<div class="fld"><div class="fld-l">专属图标</div><button class="btn full ghost sm" id="stIcons">管理 / 新增专属图标</button>' +
         '<div class="fld-h">更改现有专属图标图形、上传图片或粘贴 SVG 新增图标，并指定给任意模块。</div></div>' +
-        syncSectionHTML(S) +
+        this.syncSectionHTML(S) +
         '<div class="fld"><div class="fld-l">数据管理</div>' +
         '<div class="btn-row" style="margin-top:0"><button class="btn sm soft" id="stExport">导出备份</button><button class="btn sm soft" id="stImport">导入恢复</button></div>' +
         '<div class="fld-h">全部数据保存在本机浏览器，自动留存、每日更新；开启云端同步后，任意设备打开同一链接即自动同步、永久不丢。</div></div>' +
