@@ -363,6 +363,15 @@
 
     /* ---------- 初始化 ---------- */
     init() {
+      // 急救重置：URL 带 ?reset=1 时清空本地缓存并重新加载
+      if (location.search.includes('reset=1')) {
+        try { K.Store.reset(); } catch (e) {}
+        const url = new URL(location.href);
+        url.searchParams.delete('reset');
+        location.replace(url.toString());
+        return;
+      }
+      try {
       K.Store.load(D.defaults());
       K.injectIcons();
       if (w.Sync) w.Sync.init();
@@ -415,6 +424,18 @@
       }, 60000);
       // 事务提醒巡检
       setInterval(() => { if (P.todo && P.todo.checkRemind) P.todo.checkRemind(); }, 5 * 60000);
+      } catch (err) {
+        console.error('App init failed', err);
+        const view = document.getElementById('view');
+        if (view) {
+          view.innerHTML = '<div style="padding:28px;text-align:center;color:#c45;line-height:1.8">' +
+            '<div style="font-size:18px;font-weight:600;margin-bottom:8px">页面初始化失败</div>' +
+            '<div style="font-size:13px;color:#888;margin-bottom:16px;word-break:break-all">' + esc((err && err.message) || String(err)) + '</div>' +
+            '<button class="btn full" style="max-width:260px;margin:0 auto" onclick="try{K.Store.reset();location.reload();}catch(e){location.href=location.pathname}">重置本地数据并刷新</button>' +
+            '</div>';
+        }
+        if (w.K && K.Toast) K.Toast('初始化失败：' + ((err && err.message) || err));
+      }
     }
   };
 
