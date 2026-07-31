@@ -65,7 +65,7 @@
   const pick = arr => arr[Math.floor(Math.random() * arr.length)];
   function deepMerge(base, patch) {
     if (patch === undefined || patch === null) return base;
-    if (Array.isArray(base) || typeof base !== 'object') return patch;
+    if (base === null || base === undefined || Array.isArray(base) || typeof base !== 'object') return patch;
     const out = Object.assign({}, base);
     Object.keys(patch).forEach(k => {
       out[k] = (k in base) ? deepMerge(base[k], patch[k]) : patch[k];
