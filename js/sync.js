@@ -37,7 +37,7 @@
         }
       }
       const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 15000);
+      const t = setTimeout(() => ctrl.abort(), 10000);
       try {
         const res = await fetch(url, { method, headers, mode: 'cors', cache: 'no-store', body: body ? JSON.stringify(body) : undefined, signal: ctrl.signal });
         if (!res.ok) { const e = new Error('http ' + res.status); e.status = res.status; throw e; }
@@ -96,6 +96,12 @@
         const ic = btn.querySelector('.ic use');
         if (ic) ic.setAttribute('href', state === 'error' ? '#i-warn' : (state === 'offline' ? '#i-offline' : '#i-cloud'));
       }
+      const txt = state === 'ok' ? ('已同步' + (msg ? ' · ' + msg : '')) :
+        (state === 'error' ? ('同步出错' + (msg ? ' · ' + msg : '')) :
+        (state === 'offline' ? ('离线待同步' + (msg ? ' · ' + msg : '')) :
+        (state === 'syncing' ? ('同步中…' + (msg ? ' ' + msg : '')) : (msg || '未开启'))));
+      const stEl = document.getElementById('stSyncStatus');
+      if (stEl) stEl.textContent = '状态：' + txt;
     },
 
     /* ---------- 单次同步 ---------- */
