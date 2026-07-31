@@ -1,0 +1,636 @@
+/* =========================================================
+   mod-a.js — 模块 1~4：首页 / 待办 / 单词 / 阅读
+   ========================================================= */
+(function (w) {
+  'use strict';
+  const K = w.Core, D = w.D, $ = K.$, $$ = K.$$, esc = K.esc, ico = K.ico;
+
+  /* ---------- 通用 UI 片段 ---------- */
+  const UI = {
+    card(opts) {
+      const { title, icon, body, extra, cls, id, sort } = opts;
+      return '<section class="card ' + (cls || '') + '"' + (id ? ' id="' + id + '"' : '') + (sort ? ' data-sort-id="' + sort + '"' : '') + '>' +
+        (title ? '<div class="card-h">' +
+          (sort ? '<div class="card-drag drag-handle">' + ico('i-drag') + '</div>' : '') +
+          '<div class="card-ico">' + ico(icon || 'i-sparkle') + '</div>' +
+          '<div class="card-t">' + esc(title) + '</div>' +
+          (extra ? '<div class="card-x">' + extra + '</div>' : '') + '</div>' : '') +
+        body + '</section>';
+    },
+    stat(v, k, cls) { return '<div class="stat"><div class="stat-v ' + (cls || '') + '">' + v + '</div><div class="stat-k">' + esc(k) + '</div></div>'; },
+    bar(p, cls) { return '<div class="pbar ' + (cls || '') + '"><i style="width:' + K.clamp(p, 0, 100) + '%"></i></div>'; },
+    empty(text, icon) { return '<div class="empty">' + ico(icon || 'i-sparkle') + esc(text) + '</div>'; },
+    tag(t, c) { return '<span class="tag ' + (c || '') + '">' + esc(t) + '</span>'; }
+  };
+  w.UI = UI;
+
+  const Pages = w.Pages = w.Pages || {};
+
+  /* =======================================================
+     模块 1 · 首页
+     ======================================================= */
+  Pages.home = {
+    render() {
+      const S = K.Store.data;
+      const order = S.settings.homeCards;
+      return '<div class="fab-row"><button class="btn xs ghost" id="homeSort">调整卡片顺序</button>' +
+        '<div style="flex:1"></div><div class="hint" style="align-self:center">数据每日自动更新</div></div>' +
+        '<div id="homeCards">' + order.map(id => this.card(id)).join('') + '</div>' +
+        '<div class="foot-note">Eras Life・璇 · 本地自动留存 · 长按卡片手柄可排序</div>';
+    },
+    card(id) {
+      const S = K.Store.data, today = K.dstr();
+      switch (id) {
+        case 'days': {
+          const n = S.meta.visitDays.length, span = K.dayDiff(S.meta.firstUse, today) + 1;
+          return UI.card({
+            sort: 'days', icon: 'i-heart', title: '工作台累计使用', cls: 'tex-knit',
+            extra: '始于 ' + esc(S.meta.firstUse),
+            body: '<div class="grid g3">' +
+              UI.stat(n, '累计使用天数') + UI.stat(span, '陪伴总天数') + UI.stat(D.sleepStreak() + '/' + D.wordStreak(), '早睡 / 单词连击') +
+              '</div><div class="hint" style="margin-top:8px">你已经在自己的时代里，稳稳走过 <b>' + n + '</b> 天 ✦</div>'
+          });
+        }
+        case 'clock':
+          return UI.card({
+            sort: 'clock', icon: 'i-sparkle', title: '北京时间',
+            body: '<div class="clock"><div class="clock-t" id="clkT">--:--:--</div>' +
+              '<div class="clock-d" id="clkD">—</div><div class="clock-z">24 小时制 · 北京时间 UTC+8</div></div>'
+          });
+        case 'weather':
+          return UI.card({
+            sort: 'weather', icon: 'i-vinyl', title: '所在地实时天气',
+            extra: '<button class="btn xs ghost" id="cityBtn">' + esc(S.settings.city.name) + ' 切换</button>',
+            body: '<div id="wxBox"><div class="hint">正在获取实时天气…</div></div>'
+          });
+        case 'news':
+          return UI.card({
+            sort: 'news', icon: 'i-news', title: 'WorkBuddy 推荐 · 实时热点', cls: 'tex-news',
+            extra: '<button class="btn xs ghost" id="newsRe">刷新</button>',
+            body: '<div id="newsBox"><div class="hint">正在获取今日热点…</div></div>'
+          });
+        case 'jump':
+          return UI.card({
+            sort: 'jump', icon: 'i-news', title: '快捷跳转',
+            body: '<button class="btn primary full" data-go="todo">' + ico('i-check') + ' 一键前往【待办模块】</button>' +
+              '<div class="btn-row"><button class="btn soft" data-go="sleep">今日早睡打卡</button><button class="btn soft" data-go="mood">记录此刻心情</button></div>'
+          });
+        case 'overview': {
+          const t = D.todoRate(today), wk = D.weekTodoRate(today);
+          const wd = S.words.days[today] || {}, rl = S.reading.logs.filter(l => l.date === today);
+          const rmin = rl.reduce((s, l) => s + K.num(l.minutes), 0);
+          const sv = D.savedTotal(r => r.date === today);
+          const md = S.mood.logs.find(l => l.date === today);
+          return UI.card({
+            sort: 'overview', icon: 'i-chart', title: '今日概览',
+            body: '<div class="grid g4">' +
+              UI.stat(t.rate + '%', '待办完成', 'sm') +
+              UI.stat((wd.minutes || 0) + '′', '单词用时', 'sm') +
+              UI.stat(rmin + '′', '阅读时长', 'sm') +
+              UI.stat(md ? (md.score + '分') : '—', '心情评分', 'sm') +
+              '</div>' +
+              '<div style="margin-top:10px"><div class="prow"><span>本周待办完成率</span><b>' + wk.done + '/' + wk.all + ' · ' + wk.rate + '%</b></div>' + UI.bar(wk.rate) + '</div>' +
+              '<div style="margin-top:8px"><div class="prow"><span>今日存入</span><b>' + K.money(sv) + '</b></div></div>'
+          });
+        }
+        default: return '';
+      }
+    },
+    mount(root, App) {
+      const S = K.Store.data;
+      // 时钟
+      const tick = () => {
+        const d = K.nowBJ();
+        const t = $('#clkT'); if (!t) return;
+        t.textContent = K.pad(d.getHours()) + ':' + K.pad(d.getMinutes()) + ':' + K.pad(d.getSeconds());
+        $('#clkD').textContent = d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日 · ' + K.weekdayCN(K.dstr(d));
+      };
+      tick(); App.timer(setInterval(tick, 1000));
+
+      $$('[data-go]', root).forEach(b => b.addEventListener('click', () => App.go(b.dataset.go)));
+      const cb = $('#cityBtn'); if (cb) cb.addEventListener('click', () => this.cityPicker(App));
+      const nr = $('#newsRe'); if (nr) nr.addEventListener('click', () => this.loadNews(true));
+      const hs = $('#homeSort');
+      if (hs) hs.addEventListener('click', () => {
+        const box = $('#homeCards'); box.classList.toggle('sorting-cards');
+        hs.textContent = box.classList.contains('sorting-cards') ? '完成排序' : '调整卡片顺序';
+        hs.classList.toggle('active');
+        K.Toast(box.classList.contains('sorting-cards') ? '拖动卡片左侧手柄即可排序' : '顺序已保存');
+      });
+      const box = $('#homeCards');
+      if (box) K.makeSortable(box, {
+        item: '.card[data-sort-id]', handle: '.card-drag',
+        onEnd: ids => { S.settings.homeCards = ids; K.Store.save(); }
+      });
+      this.loadWeather(); this.loadNews(false);
+    },
+    /* 天气 */
+    loadWeather(force) {
+      const S = K.Store.data, box = $('#wxBox'); if (!box) return;
+      const c = S.settings.city, cache = S.weatherCache;
+      if (!force && cache && cache.key === c.name && Date.now() - cache.at < 20 * 60000) { this.paintWeather(cache.d); return; }
+      const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + c.lat + '&longitude=' + c.lon +
+        '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m' +
+        '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FShanghai&forecast_days=1';
+      K.fetchJSON(url, 8000).then(j => {
+        const d = {
+          t: Math.round(j.current.temperature_2m), f: Math.round(j.current.apparent_temperature),
+          h: j.current.relative_humidity_2m, wc: j.current.weather_code, wind: j.current.wind_speed_10m,
+          max: Math.round(j.daily.temperature_2m_max[0]), min: Math.round(j.daily.temperature_2m_min[0]),
+          pop: j.daily.precipitation_probability_max ? j.daily.precipitation_probability_max[0] : null, city: c.name
+        };
+        S.weatherCache = { key: c.name, at: Date.now(), d: d }; K.Store.save();
+        this.paintWeather(d);
+      }).catch(() => {
+        if (cache) { this.paintWeather(cache.d, true); }
+        else box.innerHTML = '<div class="hint">暂时无法获取实时天气（网络不可用）。<br>已保留离线模式，联网后自动恢复。</div>' +
+          '<div class="btn-row"><button class="btn sm ghost" id="wxRe">重新获取</button></div>';
+        const r = $('#wxRe'); if (r) r.addEventListener('click', () => this.loadWeather(true));
+      });
+    },
+    paintWeather(d, stale) {
+      const box = $('#wxBox'); if (!box) return;
+      const wm = D.WMO[d.wc] || ['未知', '🌈'];
+      box.innerHTML = '<div class="wx"><div class="wx-emo">' + wm[1] + '</div>' +
+        '<div style="flex:1;min-width:0"><div class="wx-t">' + d.t + '°C <span style="font-size:12px;font-weight:600;color:var(--ink-3)">' + esc(wm[0]) + '</span></div>' +
+        '<div class="wx-m">' + esc(d.city) + ' · 体感 ' + d.f + '°C · 湿度 ' + d.h + '%</div></div>' +
+        '<div style="text-align:right"><div class="tag pink">' + d.min + '° ~ ' + d.max + '°</div>' +
+        (d.pop != null ? '<div class="wx-m" style="margin-top:4px">降水概率 ' + d.pop + '%</div>' : '') + '</div></div>' +
+        '<div class="hint" style="margin-top:8px">' + (stale ? '（离线缓存）' : '') + this.wxTip(d) + '</div>';
+    },
+    wxTip(d) {
+      if (d.pop != null && d.pop >= 50) return '今天可能下雨，出门记得带伞 ☔️ 温柔照顾好自己。';
+      if (d.t >= 30) return '天气偏热，多喝水、别忘了防晒 ✦';
+      if (d.t <= 8) return '降温了，穿上你的针织毛衣再出门 🧶';
+      return '天气刚刚好，适合去完成一件小事 ✦';
+    },
+    cityPicker(App) {
+      K.Sheet.form({
+        title: '设置所在城市',
+        fields: [
+          { k: 'q', label: '城市名称（支持中文）', value: K.Store.data.settings.city.name, required: true, placeholder: '如：北京 / 杭州 / 成都' },
+          { k: 'note', type: 'note', label: '定位数据来自 Open-Meteo 公共地理服务，实时天气按所选城市展示。' }
+        ],
+        submitText: '搜索并保存',
+        onSubmit: (v, a) => {
+          K.fetchJSON('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(v.q) + '&count=1&language=zh&format=json', 8000)
+            .then(j => {
+              if (!j.results || !j.results.length) { K.Toast('没有找到这个城市，换个名字试试'); return; }
+              const r = j.results[0];
+              K.Store.data.settings.city = { name: r.name || v.q, lat: r.latitude, lon: r.longitude, auto: false };
+              K.Store.data.weatherCache = null; K.Store.save();
+              K.Toast('已切换到 ' + (r.name || v.q)); App.render();
+            }).catch(() => {
+              K.Store.data.settings.city.name = v.q; K.Store.save();
+              K.Toast('网络不可用，已记录城市名称');
+            });
+          return true;
+        }
+      });
+    },
+    /* 热点新闻 */
+    loadNews(force) {
+      const S = K.Store.data, box = $('#newsBox'); if (!box) return;
+      const cache = S.newsCache;
+      if (!force && cache && Date.now() - cache.at < 30 * 60000) { this.paintNews(cache.list, cache.src, false); return; }
+      box.innerHTML = '<div class="hint">正在获取今日热点…</div>';
+      const srcs = [
+        { n: '每日 60 秒读懂世界', u: 'https://60s.viki.moe/v2/60s', p: j => (j && j.data && j.data.news ? j.data.news : []).map(t => ({ t: t, u: '' })) },
+        { n: '今日热榜 · 微博', u: 'https://api.vvhan.com/api/hotlist/wbHot', p: j => (j && j.data ? j.data : []).map(x => ({ t: x.title, u: x.url || x.mobil_url || '' })) },
+        { n: '今日热榜 · 百度', u: 'https://api.vvhan.com/api/hotlist/baiduRD', p: j => (j && j.data ? j.data : []).map(x => ({ t: x.title, u: x.url || '' })) }
+      ];
+      const tryOne = i => {
+        if (i >= srcs.length) {
+          if (cache) this.paintNews(cache.list, cache.src, true);
+          else {
+            box.innerHTML = '<div class="hint">暂时无法连接热点源（可能处于离线环境）。<br>不过没关系——今天最值得关注的头条，是你自己的生活 ✦</div>';
+          }
+          return;
+        }
+        K.fetchJSON(srcs[i].u, 7000).then(j => {
+          const list = srcs[i].p(j).filter(x => x && x.t).slice(0, 8);
+          if (!list.length) throw new Error('empty');
+          S.newsCache = { at: Date.now(), list: list, src: srcs[i].n }; K.Store.save();
+          this.paintNews(list, srcs[i].n, false);
+        }).catch(() => tryOne(i + 1));
+      };
+      tryOne(0);
+    },
+    paintNews(list, src, stale) {
+      const box = $('#newsBox'); if (!box) return;
+      box.innerHTML = list.map((x, i) =>
+        '<div class="news-i"><div class="news-n">' + (i + 1) + '</div><div class="news-t">' +
+        (x.u ? '<a href="' + esc(x.u) + '" target="_blank" rel="noopener">' + esc(x.t) + '</a>' : esc(x.t)) + '</div></div>').join('') +
+        '<div class="hint" style="margin-top:8px">来源：' + esc(src) + (stale ? '（离线缓存）' : '') + ' · 每 30 分钟自动更新</div>';
+    }
+  };
+
+  /* =======================================================
+     模块 2 · 待办
+     ======================================================= */
+  Pages.todo = {
+    date: null,
+    render() {
+      const ds = this.date = this.date || K.dstr();
+      const S = K.Store.data;
+      D.ensureTodoDay(ds);
+      const day = S.todo.days[ds], today = K.dstr();
+      const r = D.todoRate(ds), wk = D.weekTodoRate(ds);
+      const nowM = K.hm2min(K.tstr());
+      const overdue = day.items.filter(i => !i.done && i.due && ds <= today && (ds < today || K.hm2min(i.due) < nowM));
+      let h = '';
+      h += '<div class="seg" id="dateSeg">' +
+        '<button data-d="' + K.addDays(today, -1) + '"' + (ds === K.addDays(today, -1) ? ' class="on"' : '') + '>昨天</button>' +
+        '<button data-d="' + today + '"' + (ds === today ? ' class="on"' : '') + '>今天</button>' +
+        '<button data-d="' + K.addDays(today, 1) + '"' + (ds === K.addDays(today, 1) ? ' class="on"' : '') + '>明天</button>' +
+        '<button id="pickDate">' + esc(K.mdShort(ds)) + ' ' + esc(K.weekdayCN(ds)) + ' ▾</button></div>';
+
+      h += UI.card({
+        icon: 'i-chart', title: '完成率统计', extra: esc(ds),
+        body: '<div class="grid g3">' + UI.stat(r.rate + '%', '当日完成率') + UI.stat(r.done + '/' + r.all, '当日完成数') + UI.stat(wk.rate + '%', '本周完成率') + '</div>' +
+          '<div style="margin-top:10px">' + UI.bar(r.rate) + '</div>' +
+          '<div class="prow" style="margin-top:8px"><span>本周累计 ' + wk.done + '/' + wk.all + '</span><span>' + (r.rate >= 80 ? '今天很稳，继续保持 ✦' : '慢慢来，完成比完美重要') + '</span></div>'
+      });
+
+      if (overdue.length) {
+        h += UI.card({
+          icon: 'i-bell', title: '逾期预警', cls: 'tex-news',
+          body: '<div class="hint" style="color:#D2536F;font-weight:700;margin-bottom:8px">有 ' + overdue.length + ' 项任务已超时未完成，记得尽快处理：</div>' +
+            overdue.map(i => '<div class="li overdue"><div class="li-main"><div class="li-t">' + esc(i.title) + '</div><div class="li-s">' + UI.tag('截止 ' + i.due, 'bad') + UI.tag(D.PRI[i.pri].t + '优先级', D.PRI[i.pri].c) + '</div></div></div>').join('')
+        });
+      }
+
+      D.TODO_CATS.forEach(c => {
+        const items = day.items.filter(i => i.cat === c.id);
+        const done = items.filter(i => i.done).length;
+        h += UI.card({
+          icon: c.icon, title: c.name, extra: done + '/' + items.length + (c.calendar ? ' · 联动日历' : ''),
+          body: (items.length ? items.map(i => this.item(i, ds, today)).join('') : UI.empty(c.calendar ? '暂无出行事务，点击下方新增并设置提醒' : '今天这一栏还空着')) +
+            '<button class="btn sm soft full" style="margin-top:8px" data-add="' + c.id + '">' + ico('i-plus', 'sm') + ' 新增' + esc(c.name) + '</button>'
+        });
+      });
+
+      h += UI.card({
+        icon: 'i-sparkle', title: '自动化规则',
+        body: '<div class="hint">· 未完成任务次日自动顺延，并标记「顺延」次数<br>· 设置截止时间后超时自动进入逾期预警<br>· 出行事务可开启提醒，打开工作台时自动播报<br>· 熬夜惩罚任务会自动写入「学习任务」</div>'
+      });
+      return h;
+    },
+    item(i, ds, today) {
+      const p = D.PRI[i.pri] || D.PRI.mid;
+      const nowM = K.hm2min(K.tstr());
+      const od = !i.done && i.due && (ds < today || (ds === today && K.hm2min(i.due) < nowM));
+      return '<div class="li' + (i.done ? ' done' : '') + (od ? ' overdue' : '') + '" data-id="' + i.id + '">' +
+        '<button class="cbox" data-t="' + i.id + '" aria-label="完成">' + ico('i-check') + '</button>' +
+        '<div class="li-main" data-e="' + i.id + '"><div class="li-t">' + esc(i.title) + '</div>' +
+        '<div class="li-s">' + UI.tag(p.t + '优先级', p.c) +
+        (i.due ? UI.tag((i.remind ? '⏰ ' : '') + i.due, od ? 'bad' : 'sky') : '') +
+        (i.carried ? UI.tag('顺延 ×' + i.carryN, 'warn') : '') +
+        (i.penalty ? UI.tag('熬夜惩罚', 'bad') : '') +
+        (i.note ? '<span style="color:var(--ink-3)">' + esc(i.note.slice(0, 18)) + '</span>' : '') +
+        '</div></div>' +
+        '<div class="li-act"><button class="mini-btn del" data-x="' + i.id + '" aria-label="删除">' + ico('i-close') + '</button></div></div>';
+    },
+    mount(root, App) {
+      const S = K.Store.data, ds = this.date;
+      $$('#dateSeg [data-d]', root).forEach(b => b.addEventListener('click', () => { this.date = b.dataset.d; App.render(); }));
+      const pd = $('#pickDate', root);
+      if (pd) pd.addEventListener('click', () => {
+        K.Sheet.form({
+          title: '选择日期', fields: [{ k: 'd', label: '日期', type: 'date', value: this.date, required: true }],
+          onSubmit: v => { this.date = v.d; D.ensureTodoDay(v.d); App.render(); }
+        });
+      });
+      $$('[data-t]', root).forEach(b => b.addEventListener('click', () => {
+        const it = S.todo.days[ds].items.find(x => x.id === b.dataset.t); if (!it) return;
+        it.done = !it.done; it.doneAt = it.done ? K.tstr() : ''; K.Store.save();
+        if (it.done) K.Toast(K.pick(['完成一件 ✦', '很棒，继续保持', 'Long live 今天的你', '又向前走了一步 💗']));
+        App.render();
+      }));
+      $$('[data-x]', root).forEach(b => b.addEventListener('click', () => {
+        const d = S.todo.days[ds];
+        d.items = d.items.filter(x => x.id !== b.dataset.x); K.Store.save(); App.render();
+      }));
+      $$('[data-e]', root).forEach(b => b.addEventListener('click', () => {
+        const it = S.todo.days[ds].items.find(x => x.id === b.dataset.e); if (it) this.edit(it, App);
+      }));
+      $$('[data-add]', root).forEach(b => b.addEventListener('click', () => this.edit(null, App, b.dataset.add)));
+      this.checkRemind();
+    },
+    edit(it, App, catId) {
+      const S = K.Store.data, ds = this.date, isNew = !it;
+      const cat = catId || (it && it.cat) || 'work';
+      K.Sheet.form({
+        title: isNew ? '新增任务' : '编辑任务',
+        fields: [
+          { k: 'title', label: '任务内容', required: true, value: it ? it.title : '', placeholder: '要做的事…' },
+          { k: 'cat', label: '所属分类', type: 'select', value: cat, options: D.TODO_CATS.map(c => ({ v: c.id, t: c.name })) },
+          { k: 'pri', label: '优先级', type: 'opts', value: it ? it.pri : 'mid', options: [{ v: 'high', t: '高' }, { v: 'mid', t: '中' }, { v: 'low', t: '低' }] },
+          { k: 'due', label: '截止 / 提醒时间（出行事务建议填写）', type: 'time', value: it ? it.due : '' },
+          { k: 'remind', label: '开启事务提醒', type: 'switch', value: it ? !!it.remind : false, hint: '开启后，打开工作台时会自动播报临近事务；已授权通知则同时弹出系统提醒。' },
+          { k: 'note', label: '备注', type: 'textarea', value: it ? it.note : '', placeholder: '地点、同行人、注意事项…' }
+        ],
+        onSubmit: v => {
+          if (isNew) {
+            S.todo.days[ds].items.push({ id: K.uid(), cat: v.cat, title: v.title, pri: v.pri, due: v.due, remind: v.remind, note: v.note, done: false, tpl: false });
+          } else {
+            Object.assign(it, { title: v.title, cat: v.cat, pri: v.pri, due: v.due, remind: v.remind, note: v.note });
+          }
+          K.Store.save();
+          if (v.remind && v.due) this.askNotify();
+          App.render();
+        }
+      });
+    },
+    askNotify() {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') Notification.requestPermission().then(p => { K.Store.data.settings.notify = (p === 'granted'); K.Store.save(); });
+      else K.Store.data.settings.notify = (Notification.permission === 'granted');
+    },
+    checkRemind() {
+      const S = K.Store.data, today = K.dstr(), d = S.todo.days[today]; if (!d) return;
+      const now = K.hm2min(K.tstr());
+      const soon = d.items.filter(i => !i.done && i.remind && i.due && K.hm2min(i.due) - now <= 60 && K.hm2min(i.due) - now >= -5);
+      if (soon.length) {
+        K.Toast('⏰ 即将到时：' + soon.map(i => i.title + ' ' + i.due).join('；'), 4000);
+        if (S.settings.notify && 'Notification' in window && Notification.permission === 'granted') {
+          try { new Notification('Eras Life・璇 提醒', { body: soon.map(i => i.due + ' ' + i.title).join('\n') }); } catch (e) { }
+        }
+      }
+    }
+  };
+
+  /* =======================================================
+     模块 3 · 单词
+     ======================================================= */
+  Pages.words = {
+    tab: 'week',
+    render() {
+      const S = K.Store.data, today = K.dstr(), t = S.words.days[today] || null;
+      const streak = D.wordStreak();
+      const all = Object.keys(S.words.days).filter(d => S.words.days[d].checked);
+      const totalMin = all.reduce((s, d) => s + K.num(S.words.days[d].minutes), 0);
+      const totalCnt = all.reduce((s, d) => s + K.num(S.words.days[d].count), 0);
+      let h = '';
+      h += UI.card({
+        icon: 'i-fire', title: '打卡总览', cls: 'tex-knit',
+        extra: t && t.checked ? '今日已打卡 ✓' : '今日待打卡',
+        body: '<div class="grid g4">' +
+          UI.stat(streak, '连续天数', 'sm') + UI.stat(all.length, '累计天数', 'sm') +
+          UI.stat(totalMin + '′', '累计用时', 'sm') + UI.stat(totalCnt, '累计词数', 'sm') + '</div>' +
+          '<div class="btn-row"><button class="btn primary" id="wCheck">' + (t && t.checked ? '修改今日记录' : '今日打卡记录') + '</button>' +
+          '<button class="btn soft" id="wApp">打开不背单词</button></div>' +
+          '<div class="hint" style="margin-top:8px">在「不背单词」完成背诵后回到这里同步用时与词数，数据会自动进入周月报表。</div>'
+      });
+
+      if (t && t.checked) {
+        h += UI.card({
+          icon: 'i-pen', title: '今日记录', extra: esc(today),
+          body: '<div class="grid g3">' + UI.stat(t.minutes + '′', '背诵用时') + UI.stat(t.count, '背诵词数') + UI.stat((t.wrong || 0), '新增易错') + '</div>' +
+            (t.note ? '<div class="hint" style="margin-top:8px">备注：' + esc(t.note) + '</div>' : '')
+        });
+      }
+
+      // 易错词
+      const errs = S.words.errors.slice().sort((a, b) => b.n - a.n || (b.at > a.at ? 1 : -1));
+      h += UI.card({
+        icon: 'i-news', title: '高频易错单词', extra: errs.length + ' 个',
+        body: (errs.length ? errs.slice(0, 30).map(e =>
+          '<div class="li"><div class="li-main"><div class="li-t">' + esc(e.w) + (e.m ? ' <span style="font-weight:400;color:var(--ink-3);font-size:12px">' + esc(e.m) + '</span>' : '') + '</div>' +
+          '<div class="li-s">' + UI.tag('错 ' + e.n + ' 次', e.n >= 3 ? 'bad' : 'warn') + UI.tag('最近 ' + e.at, 'grey') + '</div></div>' +
+          '<div class="li-act"><button class="mini-btn" data-ew="' + esc(e.w) + '">+1</button><button class="mini-btn del" data-dw="' + esc(e.w) + '">' + ico('i-close') + '</button></div></div>'
+        ).join('') : UI.empty('还没有错题记录，打卡时可一并录入')) +
+          '<button class="btn sm soft full" style="margin-top:8px" id="wAddErr">' + ico('i-plus', 'sm') + ' 手动添加易错词</button>'
+      });
+
+      // 报表
+      const isW = this.tab === 'week';
+      const days = isW ? K.lastNDays(7) : K.monthDays(K.mstr());
+      const mins = days.map(d => (S.words.days[d] || {}).minutes || 0);
+      const cnts = days.map(d => (S.words.days[d] || {}).count || 0);
+      const okDays = days.filter(d => (S.words.days[d] || {}).checked).length;
+      h += UI.card({
+        icon: 'i-chart', title: '学习数据报表',
+        extra: '<button class="btn xs ghost" id="wTab">' + (isW ? '周度' : '月度') + ' ▾</button>',
+        body: '<div class="grid g3">' + UI.stat(okDays + '/' + days.length, isW ? '本周打卡' : '本月打卡', 'sm') +
+          UI.stat(mins.reduce((a, b) => a + b, 0) + '′', '总用时', 'sm') +
+          UI.stat(cnts.reduce((a, b) => a + b, 0), '总词数', 'sm') + '</div>' +
+          '<div class="chart-box" style="margin-top:10px">' + K.Chart.bar({ labels: days.map(K.mdShort), data: mins, height: 140, target: S.words.target.minutes, fmt: v => Math.round(v) + '′' }) + '</div>' +
+          '<div class="legend"><span><i style="background:linear-gradient(#FFAAD3,#C0A5F5)"></i>每日背诵用时（分钟）</span><span><i style="background:#F5A8C4"></i>目标线 ' + S.words.target.minutes + '′</span></div>' +
+          '<div class="chart-box" style="margin-top:10px">' + K.Chart.line({ labels: days.map(K.mdShort), series: [{ data: cnts, color: K.Chart.C.lilac }], height: 140 }) + '</div>' +
+          '<div class="legend"><span><i style="background:#B197F0"></i>每日背诵词数</span></div>'
+      });
+      return h;
+    },
+    mount(root, App) {
+      const S = K.Store.data;
+      const c = $('#wCheck', root); if (c) c.addEventListener('click', () => this.check(App));
+      const a = $('#wApp', root); if (a) a.addEventListener('click', () => { window.open('https://bbdc.cn/', '_blank'); K.Toast('已尝试打开不背单词，背完记得回来同步 ✦'); });
+      const tb = $('#wTab', root); if (tb) tb.addEventListener('click', () => { this.tab = this.tab === 'week' ? 'month' : 'week'; App.render(); });
+      const ae = $('#wAddErr', root); if (ae) ae.addEventListener('click', () => this.addErr(App));
+      $$('[data-ew]', root).forEach(b => b.addEventListener('click', () => {
+        const e = S.words.errors.find(x => x.w === b.dataset.ew); if (e) { e.n++; e.at = K.dstr(); K.Store.save(); App.render(); }
+      }));
+      $$('[data-dw]', root).forEach(b => b.addEventListener('click', () => {
+        S.words.errors = S.words.errors.filter(x => x.w !== b.dataset.dw); K.Store.save(); App.render();
+      }));
+    },
+    check(App) {
+      const S = K.Store.data, today = K.dstr(), t = S.words.days[today] || {};
+      K.Sheet.form({
+        title: '单词打卡 · ' + today,
+        fields: [
+          { k: 'minutes', label: '背诵用时（分钟）', type: 'number', value: t.minutes || '', required: true, placeholder: '如 25' },
+          { k: 'count', label: '背诵词数', type: 'number', value: t.count || '', placeholder: '如 60' },
+          { k: 'errs', label: '今日易错单词', type: 'textarea', placeholder: '每行一个，如：\nabandon 放弃\nsubtle 微妙的', hint: '自动汇总统计，重复录入会累加错误次数并留存。' },
+          { k: 'note', label: '备注', value: t.note || '', placeholder: '今天的状态、背诵计划…' }
+        ],
+        submitText: '完成打卡',
+        onSubmit: v => {
+          let wrong = 0;
+          (v.errs || '').split('\n').map(s => s.trim()).filter(Boolean).forEach(line => {
+            const sp = line.split(/[\s,，:：]+/), word = sp.shift(), mean = sp.join(' ');
+            if (!word) return;
+            const ex = S.words.errors.find(x => x.w.toLowerCase() === word.toLowerCase());
+            if (ex) { ex.n++; ex.at = today; if (mean) ex.m = mean; }
+            else S.words.errors.push({ w: word, m: mean, n: 1, at: today });
+            wrong++;
+          });
+          S.words.days[today] = { checked: true, minutes: K.num(v.minutes), count: K.num(v.count), wrong: (t.wrong || 0) + wrong, note: v.note, at: K.tstr() };
+          // 联动待办：勾选「单词背诵」
+          const d = S.todo.days[today];
+          if (d) { const it = d.items.find(x => x.title === '单词背诵'); if (it && !it.done) { it.done = true; it.doneAt = K.tstr(); } }
+          K.Store.save();
+          K.Toast('打卡成功，连续 ' + D.wordStreak() + ' 天 ✦');
+          App.render();
+        }
+      });
+    },
+    addErr(App) {
+      K.Sheet.form({
+        title: '添加易错单词',
+        fields: [{ k: 'w', label: '单词', required: true }, { k: 'm', label: '释义' }],
+        onSubmit: v => {
+          const S = K.Store.data, ex = S.words.errors.find(x => x.w.toLowerCase() === v.w.toLowerCase());
+          if (ex) { ex.n++; ex.at = K.dstr(); if (v.m) ex.m = v.m; }
+          else S.words.errors.push({ w: v.w, m: v.m, n: 1, at: K.dstr() });
+          K.Store.save(); App.render();
+        }
+      });
+    }
+  };
+
+  /* =======================================================
+     模块 4 · 阅读
+     ======================================================= */
+  Pages.reading = {
+    tab: 'shelf',
+    render() {
+      const S = K.Store.data, today = K.dstr(), R = S.reading;
+      const tl = R.logs.filter(l => l.date === today);
+      const tmin = tl.reduce((s, l) => s + K.num(l.minutes), 0);
+      const allMin = R.logs.reduce((s, l) => s + K.num(l.minutes), 0);
+      const finished = R.books.filter(b => this.prog(b) >= 100).length;
+      const overall = R.books.length ? Math.round(R.books.reduce((s, b) => s + this.prog(b), 0) / R.books.length) : 0;
+      let h = '';
+      h += UI.card({
+        icon: 'i-book', title: '今日阅读', extra: '每日目标 ' + R.dailyMin + ' 分钟',
+        body: '<div style="display:flex;gap:14px;align-items:center">' +
+          '<div>' + K.Chart.ring({ value: K.pct(tmin, R.dailyMin), label: tmin + '′', sub: '/' + R.dailyMin + '′', size: 108, color: '#FFB6D9', color2: '#9FD3FF' }) + '</div>' +
+          '<div style="flex:1;min-width:0">' +
+          '<div class="prow"><span>今日进度</span><b>' + K.pct(tmin, R.dailyMin) + '%</b></div>' + UI.bar(K.pct(tmin, R.dailyMin)) +
+          '<div class="hint" style="margin-top:8px">' + (tmin >= R.dailyMin ? '今日目标已达成，给自己一朵小花 🌸' : '还差 ' + Math.max(0, R.dailyMin - tmin) + ' 分钟达成今日目标') + '</div>' +
+          '</div></div>' +
+          '<div class="btn-row"><button class="btn primary" id="rLog">记录今日阅读</button><button class="btn soft" id="rAdd">添加书籍</button></div>'
+      });
+
+      h += UI.card({
+        icon: 'i-chart', title: '阅读数据', extra: R.books.length + ' 本在读',
+        body: '<div class="grid g4">' + UI.stat(allMin + '′', '累计时长', 'sm') + UI.stat(R.logs.length, '打卡次数', 'sm') +
+          UI.stat(finished, '已读完', 'sm') + UI.stat(overall + '%', '整体完成率', 'sm') + '</div>' +
+          '<div class="chart-box" style="margin-top:10px">' +
+          K.Chart.bar({ labels: K.lastNDays(7).map(K.mdShort), data: K.lastNDays(7).map(d => R.logs.filter(l => l.date === d).reduce((s, l) => s + K.num(l.minutes), 0)), height: 130, target: R.dailyMin, fmt: v => Math.round(v) + '′' }) +
+          '</div><div class="legend"><span><i style="background:linear-gradient(#FFAAD3,#C0A5F5)"></i>近 7 日阅读时长</span><span><i style="background:#F5A8C4"></i>每日 30 分钟目标线</span></div>'
+      });
+
+      h += '<div class="seg" id="rTab">' +
+        ['shelf|我的书单', 'notes|摘抄感悟', 'rec|中文推荐'].map(x => {
+          const p = x.split('|');
+          return '<button data-t="' + p[0] + '"' + (this.tab === p[0] ? ' class="on"' : '') + '>' + p[1] + '</button>';
+        }).join('') + '</div>';
+
+      if (this.tab === 'shelf') {
+        h += UI.card({
+          icon: 'i-book', title: '个人阅读清单',
+          body: R.books.length ? R.books.map(b => {
+            const p = this.prog(b), read = this.readPage(b);
+            return '<div class="li" style="display:block"><div class="book">' +
+              '<div class="book-cv">' + esc(b.title.slice(0, 4)) + '</div>' +
+              '<div style="flex:1;min-width:0"><div class="li-t">' + esc(b.title) + '</div>' +
+              '<div class="li-s">' + UI.tag(esc(b.author || '佚名'), 'lilac') + UI.tag(read + '/' + b.pages + ' 页', 'sky') + (p >= 100 ? UI.tag('已读完 ✓', 'mint') : '') + '</div>' +
+              '<div style="margin-top:6px">' + UI.bar(p, p >= 100 ? 'ok' : '') + '</div></div>' +
+              '<div class="li-act"><button class="mini-btn del" data-db="' + b.id + '">' + ico('i-close') + '</button></div>' +
+              '</div></div>';
+          }).join('') : UI.empty('书架还空着，先添加一本想读的中文书吧', 'i-book')
+        });
+      } else if (this.tab === 'notes') {
+        const logs = R.logs.slice().reverse().slice(0, 40).filter(l => l.quote || l.thought);
+        h += UI.card({
+          icon: 'i-pen', title: '文字摘抄 · 个人感悟',
+          body: logs.length ? logs.map(l => {
+            const b = R.books.find(x => x.id === l.bookId);
+            return '<div class="li" style="display:block">' +
+              '<div class="li-s" style="margin-bottom:4px">' + UI.tag(l.date, 'grey') + UI.tag(b ? b.title : '未指定书籍', 'lilac') + UI.tag(l.minutes + '′ · P' + l.page, 'sky') + '</div>' +
+              (l.quote ? '<div class="quote" style="margin-bottom:6px">' + esc(l.quote) + '</div>' : '') +
+              (l.thought ? '<div class="li-t" style="font-weight:500;color:var(--ink-2)">感悟：' + esc(l.thought) + '</div>' : '') +
+              '</div>';
+          }).join('') : UI.empty('还没有摘抄，记录阅读时可以写下打动你的句子', 'i-pen')
+        });
+      } else {
+        h += UI.card({
+          icon: 'i-sparkle', title: '中文优质书籍推荐', extra: '<button class="btn xs ghost" id="recRe">换一批</button>',
+          body: this.recBooks().map(b =>
+            '<div class="li"><div class="book-cv" style="width:34px;height:46px;font-size:9px">' + esc(b.t.slice(0, 3)) + '</div>' +
+            '<div class="li-main"><div class="li-t">' + esc(b.t) + '</div>' +
+            '<div class="li-s">' + UI.tag(b.a, 'lilac') + UI.tag(b.tag, 'sky') + '</div>' +
+            '<div class="hint" style="margin-top:4px">' + esc(b.d) + '</div></div>' +
+            '<div class="li-act"><button class="mini-btn" data-ab="' + esc(b.t) + '|' + esc(b.a) + '">' + ico('i-plus') + '</button></div></div>'
+          ).join('') + '<div class="hint" style="margin-top:8px">✦ 推荐库仅收录中文书籍与文章，已全程排除英文内容。</div>'
+        });
+        h += UI.card({
+          icon: 'i-news', title: '中文好文推荐', cls: 'tex-news',
+          body: D.ARTICLE_RECS.map(a =>
+            '<div class="li"><div class="li-main"><div class="li-t">' + esc(a.t) + '</div>' +
+            '<div class="li-s">' + UI.tag(a.src, 'lilac') + '</div><div class="hint" style="margin-top:4px">' + esc(a.d) + '</div></div></div>').join('')
+        });
+      }
+      return h;
+    },
+    prog(b) { return K.pct(this.readPage(b), b.pages); },
+    readPage(b) {
+      const logs = K.Store.data.reading.logs.filter(l => l.bookId === b.id);
+      return logs.reduce((m, l) => Math.max(m, K.num(l.page)), 0);
+    },
+    recBooks() {
+      const arr = D.BOOK_RECS.filter(b => D.hasCN(b.t)).slice();
+      arr.sort(() => Math.random() - .5);
+      return arr.slice(0, 6);
+    },
+    mount(root, App) {
+      const S = K.Store.data;
+      $$('#rTab [data-t]', root).forEach(b => b.addEventListener('click', () => { this.tab = b.dataset.t; App.render(); }));
+      const ad = $('#rAdd', root); if (ad) ad.addEventListener('click', () => this.addBook(App));
+      const lg = $('#rLog', root); if (lg) lg.addEventListener('click', () => this.log(App));
+      const rr = $('#recRe', root); if (rr) rr.addEventListener('click', () => App.render());
+      $$('[data-db]', root).forEach(b => b.addEventListener('click', () => {
+        K.Sheet.confirm('删除书籍', '删除后该书的阅读记录仍会保留在摘抄中，确认删除？', () => {
+          S.reading.books = S.reading.books.filter(x => x.id !== b.dataset.db); K.Store.save(); App.render();
+        }, '删除');
+      }));
+      $$('[data-ab]', root).forEach(b => b.addEventListener('click', () => {
+        const p = b.dataset.ab.split('|');
+        this.addBook(App, { title: p[0], author: p[1] });
+      }));
+    },
+    addBook(App, pre) {
+      const S = K.Store.data;
+      K.Sheet.form({
+        title: '添加书籍',
+        fields: [
+          { k: 'title', label: '书名', required: true, value: pre ? pre.title : '', validate: v => D.hasCN(v) ? '' : '本工作台仅收录中文书籍，请填写中文书名' },
+          { k: 'author', label: '作者', value: pre ? pre.author : '' },
+          { k: 'pages', label: '书籍总页数', type: 'number', required: true, placeholder: '如 320' }
+        ],
+        onSubmit: v => {
+          S.reading.books.push({ id: K.uid(), title: v.title, author: v.author, pages: K.num(v.pages), at: K.dstr() });
+          K.Store.save(); K.Toast('已加入书单 ✦'); App.render();
+        }
+      });
+    },
+    log(App) {
+      const S = K.Store.data, today = K.dstr();
+      if (!S.reading.books.length) { K.Toast('请先添加一本书'); this.addBook(App); return; }
+      K.Sheet.form({
+        title: '今日阅读记录 · ' + today,
+        fields: [
+          { k: 'bookId', label: '选择书籍', type: 'select', options: S.reading.books.map(b => ({ v: b.id, t: b.title })) },
+          { k: 'minutes', label: '阅读时长（分钟）', type: 'number', required: true, placeholder: '不少于 ' + S.reading.dailyMin + ' 分钟' },
+          { k: 'page', label: '今日读到页码', type: 'number', placeholder: '如 128' },
+          { k: 'quote', label: '文字摘抄', type: 'textarea', placeholder: '记下今天打动你的句子…' },
+          { k: 'thought', label: '个人感悟', type: 'textarea', placeholder: '它让你想到了什么？' }
+        ],
+        submitText: '保存记录',
+        onSubmit: v => {
+          S.reading.logs.push({ id: K.uid(), date: today, bookId: v.bookId, minutes: K.num(v.minutes), page: K.num(v.page), quote: v.quote, thought: v.thought });
+          const d = S.todo.days[today];
+          if (d) { const it = d.items.find(x => x.title === '阅读打卡'); if (it && !it.done) { it.done = true; it.doneAt = K.tstr(); } }
+          K.Store.save();
+          const tot = S.reading.logs.filter(l => l.date === today).reduce((s, l) => s + K.num(l.minutes), 0);
+          K.Toast(tot >= S.reading.dailyMin ? '今日阅读目标已达成 ✦' : '已记录，今天还差 ' + (S.reading.dailyMin - tot) + ' 分钟');
+          App.render();
+        }
+      });
+    }
+  };
+
+})(window);
