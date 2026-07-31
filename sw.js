@@ -1,5 +1,5 @@
-/* Eras Life・璇 — Service Worker */
-const CACHE_NAME = "eras-life-xuan-v1";
+/* Eras Life·璇 — Service Worker */
+const CACHE_NAME = "eras-life-xuan-v2";
 const CORE_FILES = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const CORE_FILES = [
   "./js/data.js",
   "./js/mod-a.js",
   "./js/mod-b.js",
+  "./js/sync.js",
   "./js/app.js",
   "./manifest.webmanifest",
   "./favicon.svg",
@@ -32,15 +33,38 @@ self.addEventListener("activate", (e) => {
 });
 
 self.addEventListener("fetch", (e) => {
-  e.respondWith(
-    caches.match(e.request).then((cached) => {
-      return (
-        cached ||
-        fetch(e.request).catch(() => {
-          // offline fallback for navigation
-          if (e.request.mode === "navigate") return caches.match("./index.html");
-        })
-      );
-    })
-  );
+  const { request } = e;
+  const url = new URL(request.url);
+
+  // 页面导航：永远先拿网络最新版，离线才回退缓存
+  if (request.mode === "navigate") {
+    e.respondWith(
+      fetch(request).catch(() =>
+        caches.match(request).then((r) => r || caches.match("./index.html"))
+      )
+    );
+    return;
+  }
+
+  // 同域静态资源：缓存优先立即返回，同时后台更新缓存，兼顾速度与更新
+  if (url.origin === self.location.origin) {
+    e.respondWith(
+      caches.match(request).then((cached) => {
+        const network = fetch(request)
+          .then((resp) => {
+            if (resp && resp.status === 200) {
+              const clone = resp.clone();
+              caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            }
+            return resp;
+          })
+          .catch(() => cached);
+        return cached || network;
+      })
+    );
+    return;
+  }
+
+  // 跨域请求直接走网络
+  e.respondWith(fetch(request));
 });
