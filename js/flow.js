@@ -172,6 +172,13 @@
     recordHot(item);
   };
 
+  /* ---------- 无内嵌地址的外链（live 视频/文章，去原平台打开） ---------- */
+  App.openExternal = function (item) {
+    recordHot(item);
+    if (item.url) window.open(item.url, '_blank', 'noopener');
+    else App.openArticle(item);
+  };
+
   /* ---------- 浏览历史 ---------- */
   function recordHot(item) {
     const S = K.Store.data;
