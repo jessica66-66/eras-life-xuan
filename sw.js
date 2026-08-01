@@ -39,7 +39,7 @@ self.addEventListener("fetch", (e) => {
   // 页面导航：永远先拿网络最新版，离线才回退缓存
   if (request.mode === "navigate") {
     e.respondWith(
-      fetch(request).catch(() =>
+      fetch(request, { cache: "reload" }).catch(() =>
         caches.match(request).then((r) => r || caches.match("./index.html"))
       )
     );
