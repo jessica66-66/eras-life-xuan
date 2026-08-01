@@ -181,19 +181,30 @@
   App.openVideo = function (item) {
     const v = item.video || item.url || '';
     const cover = item.cover || '';
-    let embed = '', kind = 'ext', bv = '';
+    let embed = '', kind = 'ext', bv = '', dyId = '';
     const m = v.match(/player\.bilibili\.com\/player\.html\?[^"'\s]*bvid=(BV[0-9A-Za-z]+)/i)
       || v.match(/bilibili\.com\/video\/(BV[0-9A-Za-z]+)/i)
       || v.match(/\b(BV[0-9A-Za-z]+)\b/i);
+    const dy = v.match(/douyin\.com\/video\/(\d+)/i)
+      || v.match(/v\.douyin\.com\/([a-zA-Z0-9_-]+)/i);
     if (m) {
       bv = m[1] || m[2] || m[3];
       embed = 'https://player.bilibili.com/player.html?isOutside=true&bvid=' + bv + '&p=1&high_quality=1&danmaku=0&autoplay=1';
       kind = 'bili';
+    } else if (dy) {
+      dyId = dy[1] || dy[2];
+      kind = 'douyin';
     } else if (/youtube\.com\/embed\/|youtu\.be\//i.test(v)) { embed = v; kind = 'yt'; }
     else if (/\.(mp4|webm|m3u8|ogg)(\?|$)/i.test(v)) { kind = 'media'; }
 
     const biliPageUrl = bv ? 'https://www.bilibili.com/video/' + bv : (item.url || '');
-    const extUrl = biliPageUrl || item.url || embed || v;
+    const douyinPageUrl = dyId ? (v.match(/v\.douyin\.com\//i) ? v : 'https://www.douyin.com/video/' + dyId) : '';
+    const extUrl = biliPageUrl || douyinPageUrl || item.url || embed || v;
+
+    function copyBtn() {
+      const link = extUrl || item.url || item.video || '';
+      return link ? '<button class="btn sm ghost" id="pvCopy" data-link="' + esc(link) + '">复制链接</button>' : '';
+    }
 
     let body;
     if (kind === 'bili') {
@@ -208,7 +219,22 @@
         '</div>' +
         '<div class="player-foot">' +
           '<a class="btn primary full" href="' + esc(extUrl) + '" target="_blank" rel="noopener">去 B 站观看 ↗</a>' +
+          copyBtn() +
           '<div class="hint" style="margin-top:8px">B 站限制外链内嵌，点击上方按钮到 B 站观看最稳定</div>' +
+        '</div></div>';
+    } else if (kind === 'douyin') {
+      body = '<div class="player">' +
+        '<div class="player-frame">' +
+          (cover ? '<img src="' + esc(cover) + '" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(.82)">' : '') +
+          '<div class="player-ph player-ph-dark' + (cover ? ' has-cover' : '') + '">' +
+            '<div class="ph-icon">' + PLAY_ICON + '</div>' +
+            '<div class="hint">该视频需在抖音应用或网页中观看</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="player-foot">' +
+          '<a class="btn primary full" href="' + esc(extUrl) + '" target="_blank" rel="noopener">去抖音观看 ↗</a>' +
+          copyBtn() +
+          '<div class="hint" style="margin-top:8px">抖音限制外链内嵌，点击上方按钮到抖音观看最稳定</div>' +
         '</div></div>';
     } else if (kind === 'yt') {
       body = '<div class="player">' +
@@ -220,24 +246,37 @@
           '<a class="btn primary" href="' + esc(extUrl) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' +
         '</div></div>' +
         '<div class="player-foot">' +
-          '<div class="hint">若提示无法播放，请点击下方按钮到原平台观看。</div>' +
+          copyBtn() +
+          '<div class="hint" style="margin-top:8px">若提示无法播放，请点击下方按钮到原平台观看。</div>' +
           '<a class="btn soft full" style="margin-top:8px" href="' + esc(extUrl) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' +
         '</div></div>';
     } else if (kind === 'media') {
       body = '<div class="player"><div class="player-frame"><video id="pvMedia" controls playsinline preload="metadata" ' + (cover ? ('poster="' + esc(cover) + '"') : '') + ' style="width:100%;background:#000;max-height:60vh"><source src="' + esc(v) + '"></video></div>' +
-        '<div class="player-foot"><div class="hint">若无法播放，可去原平台查看。</div>' +
+        '<div class="player-foot">' + copyBtn() + '<div class="hint" style="margin-top:8px">若无法播放，可去原平台查看。</div>' +
         (item.url ? '<a class="btn soft full" style="margin-top:8px" href="' + esc(item.url) + '" target="_blank" rel="noopener">在浏览器打开 ↗</a>' : '') + '</div></div>';
     } else {
       body = '<div class="player"><div class="player-ph">' +
         (cover ? '<img src="' + esc(cover) + '" alt="">' : '<div class="ph-icon">' + PLAY_ICON + '</div>') +
         '<div class="hint">该视频需在原始平台观看</div></div>' +
-        '<div class="player-foot">' + (item.url ? '<a class="btn primary full" href="' + esc(item.url) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' : (item.video ? '<a class="btn primary full" href="' + esc(item.video) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' : '')) + '</div></div>';
+        '<div class="player-foot">' + copyBtn() + (item.url ? '<a class="btn primary full" href="' + esc(item.url) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' : (item.video ? '<a class="btn primary full" href="' + esc(item.video) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' : '')) + '</div></div>';
     }
     openFlow(body, { title: item.title });
     const root = document.getElementById('flowRoot');
     if (!root) return;
-    if (kind === 'bili') {
-      // B 站统一跳转，无需 iframe 绑定
+    const copy = root.querySelector('#pvCopy');
+    if (copy) copy.addEventListener('click', function() {
+      const link = this.dataset.link;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(() => K.Toast('链接已复制，可在对应 App 中打开'), () => K.Toast('复制失败，请手动复制地址'));
+      } else {
+        try {
+          const ta = document.createElement('textarea'); ta.value = link; document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); document.body.removeChild(ta); K.Toast('链接已复制，可在对应 App 中打开');
+        } catch (e) { K.Toast('复制失败，请手动复制地址'); }
+      }
+    });
+    if (kind === 'bili' || kind === 'douyin') {
+      // 平台限制外链内嵌，统一跳转，无需 iframe 绑定
     } else if (kind === 'yt') {
       const iframe = root.querySelector('#pvIframe');
       const load = root.querySelector('#pvLoad');
