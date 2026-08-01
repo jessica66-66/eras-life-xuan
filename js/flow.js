@@ -230,8 +230,8 @@
     } else {
       body = '<div class="player"><div class="player-ph">' +
         (cover ? '<img src="' + esc(cover) + '" alt="">' : '<div class="ph-icon">' + PLAY_ICON + '</div>') +
-        '<div class="hint">该视频暂不支持内嵌播放</div></div>' +
-        '<div class="player-foot">' + (item.url ? '<a class="btn primary full" href="' + esc(item.url) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' : '') + '</div></div>';
+        '<div class="hint">该视频需在原始平台观看</div></div>' +
+        '<div class="player-foot">' + (item.url ? '<a class="btn primary full" href="' + esc(item.url) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' : (item.video ? '<a class="btn primary full" href="' + esc(item.video) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' : '')) + '</div></div>';
     }
     openFlow(body, { title: item.title });
     const root = document.getElementById('flowRoot');
