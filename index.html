@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-apple.png">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="css/style.css?v=16">
+<link rel="stylesheet" href="css/style.css?v=17">
 </head>
 <body>
 
@@ -246,19 +246,19 @@
 <div class="toast-root" id="toastRoot"></div>
 <div class="sheet-root" id="sheetRoot"></div>
 
-<script>window.APP_VER = 'v16';</script>
+<script>window.APP_VER = 'v17';</script>
 <script src="js/core.js?v=6"></script>
-<script src="js/data.js?v=16"></script>
-<script src="js/mod-a.js?v=16"></script>
+<script src="js/data.js?v=17"></script>
+<script src="js/mod-a.js?v=17"></script>
 <script src="js/mod-b.js?v=8"></script>
 <script src="js/sync.js?v=6"></script>
 <script src="js/app.js?v=6"></script>
-<script src="js/flow.js?v=16"></script>
+<script src="js/flow.js?v=17"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
     // 自我注销型 SW：注册即清除所有残留缓存并注销，之后页面完全走网络，彻底消除旧版本缓存僵局
-    navigator.serviceWorker.register('sw.js?v=16', { updateViaCache: 'none' })
+    navigator.serviceWorker.register('sw.js?v=17', { updateViaCache: 'none' })
       .then(function(reg) { if (reg && reg.update) reg.update(); })
       .catch(function() {});
     // 若 SW 控制权发生变更（旧 SW 被新 SW 取代），刷新一次以确保加载最新页面
