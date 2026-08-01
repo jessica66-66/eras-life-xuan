@@ -22,6 +22,8 @@
     if (v >= 1e4) return (v / 1e4).toFixed(1).replace(/\.0$/, '') + '万';
     return String(v);
   }
+  /* 收藏星标 SVG（空心/实心由 CSS 控制 fill） */
+  const STAR_SVG = '<svg class="star-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.5 1.3 6.5L12 17.8 6.1 20.9l1.3-6.5L2.5 9.9l6.6-.8z"/></svg>';
 
   /* ---------- 通用 UI 片段 ---------- */
   const UI = {
@@ -129,11 +131,12 @@
       const cb = $('#cityBtn'); if (cb) cb.addEventListener('click', () => this.cityPicker(App));
       const nr = $('#newsRe'); if (nr) nr.addEventListener('click', () => this.loadNews(true));
       const hb = $('#hotBox'); if (hb) hb.addEventListener('click', e => {
-        const hist = e.target.closest('#hotHist');
-        if (hist) { this.hotHistory(); return; }
+        const star = e.target.closest('.hot-star');
+        if (star) { const it = (K.Store.data.hot.list || []).find(x => x.id === star.dataset.hid); if (it) this.toggleFav(it); return; }
         const c = e.target.closest('.hot-card');
         if (c) { const it = (K.Store.data.hot.list || []).find(x => x.id === c.dataset.hid); if (it) this.openHot(it); }
       });
+      const fb = $('#hotFav'); if (fb) fb.addEventListener('click', () => this.openFav());
       const hs = $('#homeSort');
       if (hs) hs.addEventListener('click', () => {
         const box = $('#homeCards'); box.classList.toggle('sorting-cards');
@@ -212,87 +215,117 @@
         }
       });
     },
-    /* 实时热点（全领域文章 / 视频，显示热度值，点击进入内置阅读器 / 播放器，自动记录浏览历史） */
+    /* 实时热点（全领域文章 / 视频，显示热度值，点击进入内置阅读器 / 播放器，支持收藏） */
     loadNews(force) {
       const S = K.Store.data, box = $('#hotBox');
       const cache = S.hot;
       if (!force && cache.list && cache.list.length && Date.now() - (cache.updated || 0) < 30 * 60000) { this.paintHot(cache.list, false); return; }
       if (box) box.innerHTML = '<div class="hint">正在获取今日全领域热点…</div>';
+      if (force) K.Toast('刷新中…');
       const bundled = D.HOTSPOTS.map(x => Object.assign({ id: x.id, hot: 0, domain: '精选' }, x));
+      // 主源：60s-api（国内可达，返回 hot_value）；副源：vvhan（补充广度）
       const srcs = [
-        { n: '微博', domain: '综合', type: 'article', u: 'https://api.vvhan.com/api/hotlist/wbHot' },
-        { n: '百度', domain: '综合', type: 'article', u: 'https://api.vvhan.com/api/hotlist/baiduRD' },
-        { n: '知乎', domain: '知识', type: 'article', u: 'https://api.vvhan.com/api/hotlist/zhihu' },
-        { n: '今日头条', domain: '新闻', type: 'article', u: 'https://api.vvhan.com/api/hotlist/toutiao' },
-        { n: '微信', domain: '社会', type: 'article', u: 'https://api.vvhan.com/api/hotlist/wx' },
-        { n: '36氪', domain: '财经', type: 'article', u: 'https://api.vvhan.com/api/hotlist/36kr' },
-        { n: 'IT之家', domain: '科技', type: 'article', u: 'https://api.vvhan.com/api/hotlist/ithome' },
-        { n: '豆瓣', domain: '影视', type: 'article', u: 'https://api.vvhan.com/api/hotlist/douban' },
-        { n: '虎扑', domain: '体育', type: 'article', u: 'https://api.vvhan.com/api/hotlist/hotzh' },
-        { n: 'B站', domain: '视频', type: 'video', u: 'https://api.vvhan.com/api/hotlist/bili' },
-        { n: '抖音', domain: '视频', type: 'video', u: 'https://api.vvhan.com/api/hotlist/douyin' }
+        { n: '微博', domain: '综合', type: 'article', u: 'https://60s-api.viki.moe/v2/weibo', api: '60s' },
+        { n: '知乎', domain: '知识', type: 'article', u: 'https://60s-api.viki.moe/v2/zhihu', api: '60s' },
+        { n: '抖音', domain: '视频', type: 'video', u: 'https://60s-api.viki.moe/v2/douyin', api: '60s' },
+        { n: '今日头条', domain: '新闻', type: 'article', u: 'https://60s-api.viki.moe/v2/toutiao', api: '60s' },
+        { n: '百度', domain: '综合', type: 'article', u: 'https://api.vvhan.com/api/hotlist/baiduRD', api: 'vvhan' },
+        { n: '36氪', domain: '财经', type: 'article', u: 'https://api.vvhan.com/api/hotlist/36kr', api: 'vvhan' },
+        { n: 'IT之家', domain: '科技', type: 'article', u: 'https://api.vvhan.com/api/hotlist/ithome', api: 'vvhan' },
+        { n: '豆瓣', domain: '影视', type: 'article', u: 'https://api.vvhan.com/api/hotlist/douban', api: 'vvhan' },
+        { n: '虎扑', domain: '体育', type: 'article', u: 'https://api.vvhan.com/api/hotlist/hotzh', api: 'vvhan' },
+        { n: 'B站', domain: '视频', type: 'video', u: 'https://api.vvhan.com/api/hotlist/bili', api: 'vvhan' }
       ];
+      const parseItem = (s, x) => {
+        if (s.api === '60s') {
+          return {
+            title: (x.title || '').toString(),
+            url: x.link || x.url || '',
+            cover: x.cover || '',
+            hot: toNumHot(x.hot_value || x.hot || x.num),
+            type: s.type, domain: s.domain, source: s.n
+          };
+        }
+        return {
+          title: (x.title || x.hot || x.name || '').toString(),
+          url: x.url || x.mobil_url || x.mobileUrl || '',
+          cover: '',
+          hot: toNumHot(x.hot || x.num || x.hotNum),
+          type: s.type, domain: s.domain, source: s.n
+        };
+      };
       const live = [];
       let done = 0;
       const finish = () => {
         if (done < srcs.length) return;
-        const sorted = live.slice().sort((a, b) => (b.hot || 0) - (a.hot || 0));
-        const merged = bundled.concat(sorted);
-        S.hot.list = merged; S.hot.updated = Date.now(); K.Store.save();
-        this.paintHot(merged, false);
+        if (live.length) {
+          const sorted = live.slice().sort((a, b) => (b.hot || 0) - (a.hot || 0));
+          const merged = bundled.concat(sorted);
+          S.hot.list = merged; S.hot.updated = Date.now(); K.Store.save();
+          this.paintHot(merged, false);
+        } else {
+          S.hot.list = bundled; S.hot.updated = Date.now(); K.Store.save();
+          this.paintHot(bundled, true);
+          if (force) K.Toast('刷新失败，请检查网络');
+        }
       };
       srcs.forEach((s, i) => {
         K.fetchJSON(s.u, 6000).then(j => {
-          let arr = (j && j.data) ? j.data : [];
+          let arr = (j && (j.data || j.Data)) ? (j.data || j.Data) : [];
           if (!Array.isArray(arr)) arr = Object.values(arr).filter(Boolean);
-          arr.filter(x => x && (x.title || x.hot)).slice(0, 6).forEach((x, k) => {
-            live.push({
-              id: 'live_' + i + '_' + k + '_' + K.uid(),
-              type: s.type, domain: s.domain, source: s.n,
-              title: (x.title || x.hot || x.name || '').toString(),
-              url: x.url || x.mobil_url || x.mobileUrl || '',
-              hot: toNumHot(x.hot || x.num || x.hotNum),
-              summary: '', tag: s.domain, content: null
-            });
+          arr.filter(x => x && (x.title || x.hot || x.hot_value)).slice(0, 6).forEach((x, k) => {
+            const it = parseItem(s, x);
+            it.id = 'live_' + i + '_' + k + '_' + K.uid();
+            live.push(it);
           });
         }).catch(() => {}).then(() => { done++; finish(); });
       });
+      // 兜底：全部接口超时且无任何数据 → 回退内置精选
       setTimeout(() => {
         if (done < srcs.length && live.length === 0) { S.hot.list = bundled; S.hot.updated = Date.now(); K.Store.save(); this.paintHot(bundled, true); }
       }, 9000);
     },
     paintHot(list, stale) {
       const box = $('#hotBox'); if (!box) return;
-      const hist = (K.Store.data.hot.history || []).length;
+      const S = K.Store.data;
+      S.fav = S.fav || { list: [] };
+      if (S.hot && S.hot.history) { delete S.hot.history; }
+      const favIds = {}; (S.fav.list || []).forEach(f => { favIds[f.id] = 1; });
+      const favN = S.fav.list.length;
       let h = list.map(x => {
+        const on = favIds[x.id] ? ' on' : '';
         const typeBadge = '<span class="hot-badge ' + (x.type === 'video' ? 'v' : 'a') + '">' + (x.type === 'video' ? '▶ 视频' : '文章') + '</span>';
         const dom = (x.domain && x.domain !== '精选') ? '<span class="hot-dom">' + esc(x.domain) + '</span>' : '';
-        let heat = '';
-        if (x.hot) heat = '<span class="hot-heat">热度 ' + fmtHot(x.hot) + '</span>';
-        else if (x.domain === '精选') heat = '<span class="hot-dom sel">编辑精选</span>';
+        let heat = x.hot ? '<span class="hot-heat">热度 ' + fmtHot(x.hot) + '</span>' : (x.domain === '精选' ? '<span class="hot-dom sel">编辑精选</span>' : '<span class="hot-heat none">暂无热度</span>');
+        const star = '<button class="hot-star' + on + '" data-hid="' + esc(x.id) + '" aria-label="收藏">' + STAR_SVG + '</button>';
         return '<div class="hot-card" data-hid="' + esc(x.id) + '">' +
           '<div class="hot-top">' + typeBadge + dom + heat + '</div>' +
           '<div class="hot-tt">' + esc(x.title) + '</div>' +
           (x.summary ? '<div class="hot-ds">' + esc(x.summary) + '</div>' : '') +
+          star +
         '</div>';
       }).join('');
-      h += '<div class="btn-row" style="margin-top:10px"><button class="btn sm soft" id="hotHist">浏览历史（' + hist + '）</button></div>';
+      h += '<div class="btn-row" style="margin-top:10px"><button class="btn sm soft" id="hotFav">我的收藏（' + favN + '）</button></div>';
       h += '<div class="hint" style="margin-top:6px">来源：内置精选 + 全领域实时热榜（综合·知识·新闻·社会·财经·科技·影视·体育·视频）' + (stale ? '（离线缓存）' : '') + ' · 每 30 分钟更新</div>';
       box.innerHTML = h;
     },
     openHot(item) {
-      if (item.type === 'video' && item.video) { App.openVideo(item); return; }
-      if (item.type === 'video') { App.openExternal(item); return; }
+      if (item.type === 'video') { App.openVideo(item); return; }
       App.openArticle(item);
     },
-    hotHistory() {
-      const S = K.Store.data, hist = (S.hot.history || []).slice();
-      const body = hist.length ? hist.map(h =>
-        '<div class="li" style="display:block"><div class="li-s">' + UI.tag(h.type === 'video' ? '视频' : '文章', h.type === 'video' ? 'sky' : 'lilac') +
-        UI.tag(h.at, 'grey') + '</div><div class="li-t" style="font-weight:500;margin-top:4px">' + esc(h.title) + '</div></div>').join('')
-        : UI.empty('还没有浏览记录', 'i-news');
-      K.Sheet.open({ title: '浏览历史', body: body + '<div class="hint" style="margin-top:8px">点击首页「实时热点」卡片里的文章或视频，会自动记录在这里。</div>' });
-    }
+    isFav(id) { const S = K.Store.data; S.fav = S.fav || { list: [] }; return S.fav.list.some(f => f.id === id); },
+    toggleFav(item) {
+      const S = K.Store.data; S.fav = S.fav || { list: [] };
+      const i = S.fav.list.findIndex(f => f.id === item.id);
+      let added;
+      if (i >= 0) { S.fav.list.splice(i, 1); added = false; K.Toast('已取消收藏'); }
+      else { S.fav.list.unshift(Object.assign({}, item, { at: K.dstr() })); added = true; K.Toast('收藏成功'); }
+      K.Store.save();
+      const star = document.querySelector('#hotBox .hot-card[data-hid="' + (item.id || '').replace(/"/g, '\\"') + '"] .hot-star');
+      if (star) star.classList.toggle('on', added);
+      const fb = document.querySelector('#hotFav'); if (fb) fb.textContent = '我的收藏（' + S.fav.list.length + '）';
+    },
+    openFav() { App.openFav(); }
   };
 
   /* =======================================================
