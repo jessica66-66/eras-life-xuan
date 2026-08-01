@@ -2,6 +2,9 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#FCE7F3">
 <meta name="mobile-web-app-capable" content="yes">
@@ -12,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-apple.png">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="css/style.css?v=15">
+<link rel="stylesheet" href="css/style.css?v=16">
 </head>
 <body>
 
@@ -243,20 +246,29 @@
 <div class="toast-root" id="toastRoot"></div>
 <div class="sheet-root" id="sheetRoot"></div>
 
+<script>window.APP_VER = 'v16';</script>
 <script src="js/core.js?v=6"></script>
-<script src="js/data.js?v=15"></script>
-<script src="js/mod-a.js?v=15"></script>
+<script src="js/data.js?v=16"></script>
+<script src="js/mod-a.js?v=16"></script>
 <script src="js/mod-b.js?v=8"></script>
 <script src="js/sync.js?v=6"></script>
 <script src="js/app.js?v=6"></script>
-<script src="js/flow.js?v=15"></script>
+<script src="js/flow.js?v=16"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    // v13 起暂时禁用 Service Worker：避免旧缓存/PWA 导致用户拿不到最新代码
-    navigator.serviceWorker.getRegistrations().then(function(regs) {
-      regs.forEach(function(r) { r.unregister(); });
-    }).catch(function() {});
+    // 自我注销型 SW：注册即清除所有残留缓存并注销，之后页面完全走网络，彻底消除旧版本缓存僵局
+    navigator.serviceWorker.register('sw.js?v=16', { updateViaCache: 'none' })
+      .then(function(reg) { if (reg && reg.update) reg.update(); })
+      .catch(function() {});
+    // 若 SW 控制权发生变更（旧 SW 被新 SW 取代），刷新一次以确保加载最新页面
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+      if (!reloaded && !sessionStorage.getItem('__sw_reloaded')) {
+        reloaded = true; sessionStorage.setItem('__sw_reloaded', '1');
+        location.reload();
+      }
+    });
   });
 }
 </script>
