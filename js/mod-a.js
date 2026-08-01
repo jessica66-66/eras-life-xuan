@@ -65,9 +65,9 @@
           });
         case 'news':
           return UI.card({
-            sort: 'news', icon: 'i-news', title: 'WorkBuddy 推荐 · 实时热点', cls: 'tex-news',
+            sort: 'news', icon: 'i-news', title: '实时热点 · 文章 / 视频', cls: 'tex-news',
             extra: '<button class="btn xs ghost" id="newsRe">刷新</button>',
-            body: '<div id="newsBox"><div class="hint">正在获取今日热点…</div></div>'
+            body: '<div id="hotBox"><div class="hint">正在获取今日热点…</div></div>'
           });
         case 'jump':
           return UI.card({
@@ -110,6 +110,12 @@
       $$('[data-go]', root).forEach(b => b.addEventListener('click', () => App.go(b.dataset.go)));
       const cb = $('#cityBtn'); if (cb) cb.addEventListener('click', () => this.cityPicker(App));
       const nr = $('#newsRe'); if (nr) nr.addEventListener('click', () => this.loadNews(true));
+      const hb = $('#hotBox'); if (hb) hb.addEventListener('click', e => {
+        const hist = e.target.closest('#hotHist');
+        if (hist) { this.hotHistory(); return; }
+        const c = e.target.closest('.hot-card');
+        if (c) { const it = (K.Store.data.hot.list || []).find(x => x.id === c.dataset.hid); if (it) this.openHot(it); }
+      });
       const hs = $('#homeSort');
       if (hs) hs.addEventListener('click', () => {
         const box = $('#homeCards'); box.classList.toggle('sorting-cards');
@@ -188,40 +194,57 @@
         }
       });
     },
-    /* 热点新闻 */
+    /* 实时热点（文章 / 视频，点击进入内置阅读器 / 播放器，自动记录浏览历史） */
     loadNews(force) {
-      const S = K.Store.data, box = $('#newsBox'); if (!box) return;
-      const cache = S.newsCache;
-      if (!force && cache && Date.now() - cache.at < 30 * 60000) { this.paintNews(cache.list, cache.src, false); return; }
-      box.innerHTML = '<div class="hint">正在获取今日热点…</div>';
+      const S = K.Store.data, box = $('#hotBox');
+      const cache = S.hot;
+      if (!force && cache.list && cache.list.length && Date.now() - (cache.updated || 0) < 30 * 60000) { this.paintHot(cache.list, false); return; }
+      if (box) box.innerHTML = '<div class="hint">正在获取今日热点…</div>';
+      const bundled = D.HOTSPOTS.map(x => Object.assign({ id: x.id }, x));
       const srcs = [
-        { n: '每日 60 秒读懂世界', u: 'https://60s.viki.moe/v2/60s', p: j => (j && j.data && j.data.news ? j.data.news : []).map(t => ({ t: t, u: '' })) },
-        { n: '今日热榜 · 微博', u: 'https://api.vvhan.com/api/hotlist/wbHot', p: j => (j && j.data ? j.data : []).map(x => ({ t: x.title, u: x.url || x.mobil_url || '' })) },
-        { n: '今日热榜 · 百度', u: 'https://api.vvhan.com/api/hotlist/baiduRD', p: j => (j && j.data ? j.data : []).map(x => ({ t: x.title, u: x.url || '' })) }
+        { n: '微博热榜', u: 'https://api.vvhan.com/api/hotlist/wbHot', p: j => (j && j.data ? j.data : []).map(x => ({ t: x.title, u: x.url || x.mobil_url || '' })) },
+        { n: '百度热榜', u: 'https://api.vvhan.com/api/hotlist/baiduRD', p: j => (j && j.data ? j.data : []).map(x => ({ t: x.title, u: x.url || '' })) }
       ];
       const tryOne = i => {
         if (i >= srcs.length) {
-          if (cache) this.paintNews(cache.list, cache.src, true);
-          else {
-            box.innerHTML = '<div class="hint">暂时无法连接热点源（可能处于离线环境）。<br>不过没关系——今天最值得关注的头条，是你自己的生活 ✦</div>';
-          }
-          return;
+          S.hot.list = bundled; S.hot.updated = Date.now(); K.Store.save();
+          this.paintHot(bundled, false); return;
         }
         K.fetchJSON(srcs[i].u, 7000).then(j => {
-          const list = srcs[i].p(j).filter(x => x && x.t).slice(0, 8);
-          if (!list.length) throw new Error('empty');
-          S.newsCache = { at: Date.now(), list: list, src: srcs[i].n }; K.Store.save();
-          this.paintNews(list, srcs[i].n, false);
+          const live = srcs[i].p(j).filter(x => x && x.t).slice(0, 6)
+            .map(x => ({ id: 'live_' + i + '_' + K.uid(), type: 'article', title: x.t, url: x.u, summary: '', tag: srcs[i].n }));
+          const merged = bundled.concat(live);
+          S.hot.list = merged; S.hot.updated = Date.now(); K.Store.save();
+          this.paintHot(merged, false);
         }).catch(() => tryOne(i + 1));
       };
       tryOne(0);
     },
-    paintNews(list, src, stale) {
-      const box = $('#newsBox'); if (!box) return;
-      box.innerHTML = list.map((x, i) =>
-        '<div class="news-i"><div class="news-n">' + (i + 1) + '</div><div class="news-t">' +
-        (x.u ? '<a href="' + esc(x.u) + '" target="_blank" rel="noopener">' + esc(x.t) + '</a>' : esc(x.t)) + '</div></div>').join('') +
-        '<div class="hint" style="margin-top:8px">来源：' + esc(src) + (stale ? '（离线缓存）' : '') + ' · 每 30 分钟自动更新</div>';
+    paintHot(list, stale) {
+      const box = $('#hotBox'); if (!box) return;
+      const hist = (K.Store.data.hot.history || []).length;
+      let h = list.map(x =>
+        '<div class="hot-card" data-hid="' + esc(x.id) + '">' +
+          '<span class="hot-badge ' + (x.type === 'video' ? 'v' : 'a') + '">' + (x.type === 'video' ? '▶ 视频' : '文章') + '</span>' +
+          '<div class="hot-tt">' + esc(x.title) + '</div>' +
+          (x.summary ? '<div class="hot-ds">' + esc(x.summary) + '</div>' : '') +
+          (x.tag ? '<div class="hot-tag">' + esc(x.tag) + '</div>' : '') +
+        '</div>').join('');
+      h += '<div class="btn-row" style="margin-top:10px"><button class="btn sm soft" id="hotHist">浏览历史（' + hist + '）</button></div>';
+      h += '<div class="hint" style="margin-top:6px">来源：内置精选 + 实时热榜' + (stale ? '（离线缓存）' : '') + ' · 每 30 分钟更新</div>';
+      box.innerHTML = h;
+    },
+    openHot(item) {
+      if (item.type === 'video') App.openVideo(item);
+      else App.openArticle(item);
+    },
+    hotHistory() {
+      const S = K.Store.data, hist = (S.hot.history || []).slice();
+      const body = hist.length ? hist.map(h =>
+        '<div class="li" style="display:block"><div class="li-s">' + UI.tag(h.type === 'video' ? '视频' : '文章', h.type === 'video' ? 'sky' : 'lilac') +
+        UI.tag(h.at, 'grey') + '</div><div class="li-t" style="font-weight:500;margin-top:4px">' + esc(h.title) + '</div></div>').join('')
+        : UI.empty('还没有浏览记录', 'i-news');
+      K.Sheet.open({ title: '浏览历史', body: body + '<div class="hint" style="margin-top:8px">点击首页「实时热点」卡片里的文章或视频，会自动记录在这里。</div>' });
     }
   };
 
@@ -524,10 +547,10 @@
           icon: 'i-book', title: '个人阅读清单',
           body: R.books.length ? R.books.map(b => {
             const p = this.prog(b), read = this.readPage(b);
-            return '<div class="li" style="display:block"><div class="book">' +
+            return '<div class="li book-li" style="display:block" data-book="' + b.id + '"><div class="book">' +
               '<div class="book-cv">' + esc(b.title.slice(0, 4)) + '</div>' +
               '<div style="flex:1;min-width:0"><div class="li-t">' + esc(b.title) + '</div>' +
-              '<div class="li-s">' + UI.tag(esc(b.author || '佚名'), 'lilac') + UI.tag(read + '/' + b.pages + ' 页', 'sky') + (p >= 100 ? UI.tag('已读完 ✓', 'mint') : '') + '</div>' +
+              '<div class="li-s">' + UI.tag(esc(b.author || '佚名'), 'lilac') + UI.tag('读到 ' + read + '/' + b.pages + ' 页', 'sky') + (p >= 100 ? UI.tag('已读完 ✓', 'mint') : '') + '</div>' +
               '<div style="margin-top:6px">' + UI.bar(p, p >= 100 ? 'ok' : '') + '</div></div>' +
               '<div class="li-act"><button class="mini-btn del" data-db="' + b.id + '">' + ico('i-close') + '</button></div>' +
               '</div></div>';
@@ -568,6 +591,7 @@
     },
     prog(b) { return K.pct(this.readPage(b), b.pages); },
     readPage(b) {
+      if (b.progress) return Math.min(b.progress, b.pages || b.progress);
       const logs = K.Store.data.reading.logs.filter(l => l.bookId === b.id);
       return logs.reduce((m, l) => Math.max(m, K.num(l.page)), 0);
     },
@@ -587,6 +611,10 @@
           S.reading.books = S.reading.books.filter(x => x.id !== b.dataset.db); K.Store.save(); App.render();
         }, '删除');
       }));
+      $$('[data-book]', root).forEach(b => b.addEventListener('click', e => {
+        if (e.target.closest('[data-db]')) return;
+        App.openReader(b.dataset.book);
+      }));
       $$('[data-ab]', root).forEach(b => b.addEventListener('click', () => {
         const p = b.dataset.ab.split('|');
         this.addBook(App, { title: p[0], author: p[1] });
@@ -599,10 +627,11 @@
         fields: [
           { k: 'title', label: '书名', required: true, value: pre ? pre.title : '', validate: v => D.hasCN(v) ? '' : '本工作台仅收录中文书籍，请填写中文书名' },
           { k: 'author', label: '作者', value: pre ? pre.author : '' },
-          { k: 'pages', label: '书籍总页数', type: 'number', required: true, placeholder: '如 320' }
+          { k: 'pages', label: '书籍总页数', type: 'number', required: true, placeholder: '如 320' },
+          { k: 'content', label: '书籍全文（可选，粘贴后开启分页阅读与摘抄）', type: 'textarea', placeholder: '在此粘贴书籍全文，系统会自动分页；留空也可稍后在阅读器内补录' }
         ],
         onSubmit: v => {
-          S.reading.books.push({ id: K.uid(), title: v.title, author: v.author, pages: K.num(v.pages), at: K.dstr() });
+          S.reading.books.push({ id: K.uid(), title: v.title, author: v.author, pages: K.num(v.pages), content: (v.content || '').trim(), progress: 0, at: K.dstr() });
           K.Store.save(); K.Toast('已加入书单 ✦'); App.render();
         }
       });
