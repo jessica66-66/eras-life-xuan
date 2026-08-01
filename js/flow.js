@@ -185,20 +185,25 @@
     const m = v.match(/player\.bilibili\.com\/player\.html\?[^"'\s]*bvid=(BV[0-9A-Za-z]+)/i)
       || v.match(/bilibili\.com\/video\/(BV[0-9A-Za-z]+)/i)
       || v.match(/\b(BV[0-9A-Za-z]+)\b/i);
+    // 抖音热榜返回的可能是搜索页 /search/xxx、话题页 /discover?modal_id=xxx、短链 v.douyin.com 或 video 页；
+    // 只要域名命中 douyin.com / iesdouyin.com，就统一按抖音处理并给出跳转按钮
     const dy = v.match(/douyin\.com\/video\/(\d+)/i)
-      || v.match(/v\.douyin\.com\/([a-zA-Z0-9_-]+)/i);
+      || v.match(/v\.douyin\.com\/([a-zA-Z0-9_-]+)/i)
+      || v.match(/douyin\.com\/search\/([^?#\s]+)/i)
+      || v.match(/douyin\.com\/discover\?modal_id=(\d+)/i)
+      || (/douyin\.com|iesdouyin\.com/i.test(v) ? [null, 'topic'] : null);
     if (m) {
       bv = m[1] || m[2] || m[3];
       embed = 'https://player.bilibili.com/player.html?isOutside=true&bvid=' + bv + '&p=1&high_quality=1&danmaku=0&autoplay=1';
       kind = 'bili';
     } else if (dy) {
-      dyId = dy[1] || dy[2];
+      dyId = dy[1] || dy[2] || dy[3] || dy[4] || 'topic';
       kind = 'douyin';
     } else if (/youtube\.com\/embed\/|youtu\.be\//i.test(v)) { embed = v; kind = 'yt'; }
     else if (/\.(mp4|webm|m3u8|ogg)(\?|$)/i.test(v)) { kind = 'media'; }
 
     const biliPageUrl = bv ? 'https://www.bilibili.com/video/' + bv : (item.url || '');
-    const douyinPageUrl = dyId ? (v.match(/v\.douyin\.com\//i) ? v : 'https://www.douyin.com/video/' + dyId) : '';
+    const douyinPageUrl = (kind === 'douyin' && v) ? v : '';
     const extUrl = biliPageUrl || douyinPageUrl || item.url || embed || v;
 
     function copyBtn() {
