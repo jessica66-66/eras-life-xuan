@@ -1,5 +1,5 @@
 /* Eras Life·璇 — Service Worker */
-const CACHE_NAME = "eras-life-xuan-v2";
+const CACHE_NAME = "eras-life-xuan-v3";
 const CORE_FILES = [
   "./",
   "./index.html",
@@ -10,6 +10,7 @@ const CORE_FILES = [
   "./js/mod-b.js",
   "./js/sync.js",
   "./js/app.js",
+  "./js/flow.js",
   "./manifest.webmanifest",
   "./favicon.svg",
   "./icon-192.png",
