@@ -5,13 +5,14 @@
   'use strict';
   const K = w.Core, D = w.D, $ = K.$, $$ = K.$$, esc = K.esc, ico = K.ico;
 
-  /* 热度值解析与格式化（vvhan 返回数字或「123万」字符串） */
+  /* 热度值解析与格式化（支持 60s-api 的 hot_value / hot_value_desc，以及 vvhan 的 hot/num） */
   function toNumHot(v) {
     if (v == null) return 0;
     if (typeof v === 'number') return v;
     const s = String(v).replace(/[, ]/g, '');
     if (/亿/.test(s)) return parseFloat(s) * 1e8;
     if (/万/.test(s)) return parseFloat(s) * 1e4;
+    if (/千/.test(s)) return parseFloat(s) * 1e3;
     const n = parseFloat(s);
     return isFinite(n) ? n : 0;
   }
@@ -235,46 +236,66 @@
       if (isOnlyBundled) { S.hot.list = []; S.hot.updated = 0; K.Store.save(); }
       if (force) { S.hot.list = []; S.hot.updated = 0; K.Store.save(); }
       if (!force && S.hot.list && S.hot.list.length) { this.paintHot(S.hot.list, false); return; }
-      if (box) box.innerHTML = '<div class="hint">正在获取今日全领域热点…</div>';
+      if (box) box.innerHTML = '<div class="hot-status"><div class="spinner sm"></div><div class="hint">正在获取全领域实时热点…</div></div>';
       const nr = $('#newsRe'); if (nr) { nr.disabled = true; nr.classList.add('loading'); nr.textContent = '刷新中'; }
       if (force) K.Toast('刷新中…');
-      // 当前仅保留国内稳定可访问的 60s-api 四大源，避免 vvhan 等被墙源拖垮整体刷新体验
+      // 主源：60s-api（国内可达，字段规范）；备用源：vvhan（短超时，避免拖垮）
       const srcs = [
-        { n: '微博', domain: '综合', type: 'article', u: 'https://60s-api.viki.moe/v2/weibo' },
-        { n: '知乎', domain: '知识', type: 'article', u: 'https://60s-api.viki.moe/v2/zhihu' },
-        { n: '抖音', domain: '视频', type: 'video', u: 'https://60s-api.viki.moe/v2/douyin' },
-        { n: '今日头条', domain: '新闻', type: 'article', u: 'https://60s-api.viki.moe/v2/toutiao' }
+        { n: '微博', domain: '综合', type: 'article', u: 'https://60s-api.viki.moe/v2/weibo', timeout: 6000 },
+        { n: '知乎', domain: '知识', type: 'article', u: 'https://60s-api.viki.moe/v2/zhihu', timeout: 6000 },
+        { n: '抖音', domain: '视频', type: 'video', u: 'https://60s-api.viki.moe/v2/douyin', timeout: 6000 },
+        { n: '今日头条', domain: '新闻', type: 'article', u: 'https://60s-api.viki.moe/v2/toutiao', timeout: 6000 },
+        { n: '百度', domain: '综合', type: 'article', u: 'https://api.vvhan.com/api/hotlist/baiduRD', timeout: 4000 },
+        { n: '36氪', domain: '财经', type: 'article', u: 'https://api.vvhan.com/api/hotlist/36kr', timeout: 4000 },
+        { n: 'IT之家', domain: '科技', type: 'article', u: 'https://api.vvhan.com/api/hotlist/ithome', timeout: 4000 }
       ];
       const parseItem = (s, x) => ({
         title: (x.title || '').toString(),
-        url: x.link || x.url || '',
+        url: x.link || x.url || x.mobileUrl || x.mobil_url || '',
         cover: x.cover || '',
-        hot: toNumHot(x.hot_value || x.hot || x.num),
+        hot: toNumHot(x.hot_value || x.hot_value_desc || x.hot || x.num),
         type: s.type, domain: s.domain, source: s.n
       });
       const live = [];
-      const errs = [];
-      let done = 0;
+      const srcStatus = srcs.map(() => 'pending'); // pending/success/fail
+      const statusMeta = { ok: 0, fail: 0, at: 0 };
+      let done = 0, rendered = false;
       const restoreBtn = () => {
         const nr = $('#newsRe');
         if (nr) { nr.disabled = false; nr.classList.remove('loading'); nr.textContent = '刷新'; }
       };
+      const updateStatus = () => {
+        const el = box && box.querySelector('.hot-status');
+        if (!el) return;
+        const tags = srcs.map((s, i) => {
+          const st = srcStatus[i];
+          const icon = st === 'success' ? '✓' : st === 'fail' ? '✗' : '···';
+          return '<span class="src-tag ' + st + '">' + icon + ' ' + esc(s.n) + '</span>';
+        }).join('');
+        el.innerHTML = '<div class="spinner sm"></div><div class="hint">正在获取全领域实时热点…</div><div class="src-row">' + tags + '</div>';
+      };
+      const paintNow = () => {
+        if (!live.length) return;
+        const sorted = live.slice().sort((a, b) => (b.hot || 0) - (a.hot || 0));
+        const merged = bundled.concat(sorted);
+        S.hot.list = merged; S.hot.updated = Date.now(); K.Store.save();
+        this.paintHot(merged, false, statusMeta);
+        rendered = true;
+      };
       const finish = () => {
         if (done < srcs.length) return;
         restoreBtn();
+        statusMeta.at = Date.now();
         if (live.length) {
-          const sorted = live.slice().sort((a, b) => (b.hot || 0) - (a.hot || 0));
-          const merged = bundled.concat(sorted);
-          S.hot.list = merged; S.hot.updated = Date.now(); K.Store.save();
-          this.paintHot(merged, false);
-          if (force) K.Toast('刷新完成，共 ' + live.length + ' 条');
+          paintNow();
+          if (force) K.Toast('刷新完成：' + live.length + ' 条 · ' + statusMeta.ok + '/' + srcs.length + ' 个源');
         } else {
           // 全部失败：在页面上给出明确提示和重试按钮，不要默默回退到旧缓存
           if (box) {
             box.innerHTML = '<div class="hot-empty">' +
               '<div class="hot-empty-icon">📡</div>' +
               '<div class="hot-empty-title">实时热点获取失败</div>' +
-              '<div class="hot-empty-desc">可能原因：网络受限、接口暂时不可用或浏览器缓存了旧版本。<br>点击下方按钮重新获取，或检查网络后重试。</div>' +
+              '<div class="hot-empty-desc">可能原因：网络受限、接口暂时不可用或当前地区无法访问热榜接口。<br>点击下方按钮重新获取，或检查网络后重试。</div>' +
               '<button class="btn primary" id="hotRetry">重新获取热点</button>' +
               '</div>';
             const r = $('#hotRetry'); if (r) r.addEventListener('click', () => this.loadNews(true));
@@ -282,26 +303,33 @@
           if (force) K.Toast('刷新失败，请检查网络');
         }
       };
+      updateStatus();
       srcs.forEach((s, i) => {
-        K.fetchJSON(s.u, 8000).then(j => {
+        K.fetchJSON(s.u, s.timeout || 6000).then(j => {
           let arr = (j && (j.data || j.Data)) ? (j.data || j.Data) : [];
           if (!Array.isArray(arr)) arr = Object.values(arr).filter(Boolean);
-          arr.filter(x => x && (x.title || x.hot_value)).slice(0, 8).forEach((x, k) => {
+          arr.filter(x => x && (x.title || x.hot_value || x.hot_value_desc)).slice(0, 6).forEach((x, k) => {
             const it = parseItem(s, x);
             it.id = 'live_' + i + '_' + k + '_' + K.uid();
             live.push(it);
           });
-        }).catch(e => { errs.push(s.n + ': ' + (e && e.message ? e.message : '失败')); }).then(() => { done++; finish(); });
+          srcStatus[i] = 'success'; statusMeta.ok++;
+        }).catch(() => { srcStatus[i] = 'fail'; statusMeta.fail++; }).then(() => {
+          done++;
+          if (live.length && !rendered) paintNow(); // 有数据先渲染，不等全部完成
+          finish();
+          if (!rendered) updateStatus();
+        });
       });
-      // 兜底：任一源超时后若仍无数据，也直接报错，不再等待剩余源
+      // 兜底：10s 后若仍无数据，强制结束并显示错误
       setTimeout(() => {
-        if (live.length === 0) {
-          done = srcs.length; // 强制结束等待
+        if (done < srcs.length && live.length === 0) {
+          done = srcs.length;
           finish();
         }
       }, 10000);
     },
-    paintHot(list, stale) {
+    paintHot(list, stale, meta) {
       const box = $('#hotBox'); if (!box) return;
       const S = K.Store.data;
       S.fav = S.fav || { list: [] };
@@ -322,7 +350,10 @@
         '</div>';
       }).join('');
       h += '<div class="btn-row" style="margin-top:10px"><button class="btn sm soft" id="hotFav">我的收藏（' + favN + '）</button></div>';
-      h += '<div class="hint" style="margin-top:6px">来源：内置精选 + 全领域实时热榜（综合·知识·新闻·社会·财经·科技·影视·体育·视频）' + (stale ? '（离线缓存）' : '') + ' · 点击刷新按钮随时更新 · ' + (window.APP_VER || '') + '</div>';
+      const liveCount = list.filter(x => x.id && String(x.id).indexOf('live_') === 0).length;
+      const metaTxt = meta && meta.ok ? (' · 已更新 ' + liveCount + ' 条 · ' + meta.ok + '/' + (meta.ok + meta.fail) + ' 个源') : '';
+      const updatedAt = S.hot.updated ? ' · 更新于 ' + K.tstr(new Date(S.hot.updated)) : '';
+      h += '<div class="hint" style="margin-top:6px">来源：内置精选 + 全领域实时热榜（综合·知识·新闻·社会·财经·科技·影视·体育·视频）' + (stale ? '（离线缓存）' : '') + metaTxt + updatedAt + ' · 点击刷新按钮随时更新 · ' + (window.APP_VER || '') + '</div>';
       box.innerHTML = h;
     },
     openHot(item) {
