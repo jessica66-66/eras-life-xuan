@@ -418,6 +418,12 @@ select.inp{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.
 .hot-empty-icon{font-size:42px;margin-bottom:10px;}
 .hot-empty-title{font-weight:800;color:var(--ink-1);margin-bottom:6px;}
 .hot-empty-desc{font-size:12.5px;color:var(--ink-3);line-height:1.6;margin-bottom:16px;}
+.hot-status{display:flex;flex-direction:column;align-items:center;gap:10px;padding:26px 14px;text-align:center;}
+.hot-status .spinner.sm,.spinner.sm{width:18px;height:18px;border-width:2px;}
+.src-row{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:4px;}
+.src-tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;background:#F0ECF4;color:#A99CB4;}
+.src-tag.success{background:#E5F6E9;color:#3A9D5F;}
+.src-tag.fail{background:#FFE8EC;color:#D2536F;}
 
 /* 全屏流页面（阅读器 / 文章 / 视频） */
 .flow-mask{position:fixed;inset:0;background:rgba(72,54,84,.34);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);opacity:0;transition:opacity .26s;z-index:240;}
