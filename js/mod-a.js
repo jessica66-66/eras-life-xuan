@@ -234,7 +234,7 @@
         { n: 'IT之家', domain: '科技', type: 'article', u: 'https://api.vvhan.com/api/hotlist/ithome', api: 'vvhan' },
         { n: '豆瓣', domain: '影视', type: 'article', u: 'https://api.vvhan.com/api/hotlist/douban', api: 'vvhan' },
         { n: '虎扑', domain: '体育', type: 'article', u: 'https://api.vvhan.com/api/hotlist/hotzh', api: 'vvhan' },
-        { n: 'B站', domain: '视频', type: 'video', u: 'https://api.vvhan.com/api/hotlist/bili', api: 'vvhan' }
+        { n: 'B站', domain: 'B站', type: 'video', u: 'https://api.vvhan.com/api/hotlist/bili', api: 'vvhan' }
       ];
       const parseItem = (s, x) => {
         if (s.api === '60s') {
