@@ -451,6 +451,13 @@ select.inp{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.
 .spinner{width:26px;height:26px;border-radius:50%;border:3px solid rgba(180,150,200,.3);border-top-color:#a87fd0;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .player-foot{display:flex;flex-direction:column;}
+.player-ph-dark{inset:0;background:rgba(0,0,0,.45);color:#fff;}
+.player-ph-dark.has-cover{background:rgba(0,0,0,.35);}
+.player-ph-dark .ph-icon{background:rgba(255,255,255,.2);color:#fff;}
+.player-ph-dark .ph-icon svg{fill:#fff;}
+.player-fallback{position:absolute;left:0;right:0;bottom:0;display:none;flex-direction:row;align-items:center;justify-content:space-between;gap:10px;background:rgba(0,0,0,.78);color:#fff;padding:10px 14px;font-size:13px;border-radius:0 0 var(--r-m) var(--r-m);}
+.player-fallback .hint{flex:1;}
+.player-fallback .btn{white-space:nowrap;}
 
 /* 我的收藏 */
 .fav-empty{padding:48px 16px;text-align:center;}
