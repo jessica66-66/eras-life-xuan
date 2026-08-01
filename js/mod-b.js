@@ -355,14 +355,24 @@
             (t.bad ? '<div class="li"><div class="li-main"><div class="li-s">' + UI.tag('糟心事', 'bad') + '</div><div class="li-t" style="font-weight:500;margin-top:4px">' + esc(t.bad) + '</div></div></div>' : '') +
             '<button class="btn sm soft full" style="margin-top:8px" id="mdEdit">补充 / 修改今日记录</button>'
         });
-        const q = t.quote || K.pick(D.QUOTES[t.mood] || D.QUOTES.calm);
-        h += UI.card({
-          icon: 'i-sparkle', title: '为你匹配的治愈金句',
-          extra: '<button class="btn xs ghost" id="qRe">换一句</button>',
-          body: '<div class="quote">' + esc(q.t) + '<div class="qm">—— ' + esc(q.a) + '</div></div>' +
-            '<div class="btn-row"><button class="btn soft" id="qFav">' + ico('i-heart', 'sm') + ' 收藏这句</button></div>'
-        });
       }
+
+      // 治愈金句（扩充素材库 + 随机降重）
+      if (!(S.mood.healing && S.mood.healing.t)) S.mood.healing = this.healPick(S);
+      const hq = S.mood.healing;
+      h += UI.card({
+        icon: 'i-sparkle', title: '今日治愈金句',
+        extra: '<button class="btn xs ghost" id="qRe">换一句</button>',
+        body: '<div class="quote">' + esc(hq.t) + '<div class="qm">—— ' + esc(hq.a) + (hq.cat ? ' · ' + esc(hq.cat) : '') + '</div></div>' +
+          '<div class="btn-row"><button class="btn soft" id="qFav">' + ico('i-heart', 'sm') + ' 收藏这句</button></div>'
+      });
+      const flow = this.healFlow(S);
+      h += UI.card({
+        icon: 'i-book', title: '治愈金句库 · 随便翻翻',
+        extra: '<button class="btn xs ghost" id="qFlow">换一批</button>',
+        body: flow.map(q => '<div class="quote sm">' + esc(q.t) + '<div class="qm">—— ' + esc(q.a) + ' · ' + esc(q.cat) + '</div></div>').join('') +
+          '<div class="hint" style="margin-top:6px">素材覆盖诗词 / 文学 / 影视 / 散文 / 心理 / 治愈，随机推送、减少重复。</div>'
+      });
 
       h += '<div class="seg" id="mdTab">' +
         ['today|金句收藏夹', 'board|月度心情看板'].map(x => { const p = x.split('|'); return '<button data-t="' + p[0] + '"' + (this.tab === p[0] ? ' class="on"' : '') + '>' + p[1] + '</button>'; }).join('') + '</div>';
@@ -418,14 +428,14 @@
       }));
       const e = $('#mdEdit', root); if (e) e.addEventListener('click', () => this.edit(App));
       const qr = $('#qRe', root); if (qr) qr.addEventListener('click', () => {
-        const t = S.mood.logs.find(l => l.date === today); if (!t) return;
-        t.quote = K.pick(D.QUOTES[t.mood] || D.QUOTES.calm); K.Store.save(); App.render();
+        S.mood.healing = this.healPick(S); K.Store.save(); App.render();
       });
       const qf = $('#qFav', root); if (qf) qf.addEventListener('click', () => {
-        const t = S.mood.logs.find(l => l.date === today); if (!t || !t.quote) return;
-        if (S.mood.favs.some(f => f.t === t.quote.t)) { K.Toast('已经在收藏夹里啦'); return; }
-        S.mood.favs.push({ id: K.uid(), t: t.quote.t, a: t.quote.a, at: today }); K.Store.save(); K.Toast('已收藏 🤍'); App.render();
+        const hq = S.mood.healing; if (!hq) return;
+        if (S.mood.favs.some(f => f.t === hq.t)) { K.Toast('已经在收藏夹里啦'); return; }
+        S.mood.favs.push({ id: K.uid(), t: hq.t, a: hq.a, at: today }); K.Store.save(); K.Toast('已收藏 🤍'); App.render();
       });
+      const qfl = $('#qFlow', root); if (qfl) qfl.addEventListener('click', () => App.render());
       $$('[data-df]', root).forEach(b => b.addEventListener('click', () => {
         S.mood.favs = S.mood.favs.filter(f => f.id !== b.dataset.df); K.Store.save(); App.render();
       }));
@@ -452,6 +462,24 @@
           K.Store.save(); K.Toast('已保存 ✦'); App.render();
         }
       });
+    },
+    /* 治愈金句：扩展素材库 + 随机降重 */
+    healPick(S) {
+      const pool = D.HEALING || [];
+      const recent = S.mood.recent || [];
+      let cand = pool.filter(q => recent.indexOf(q.t) < 0);
+      if (!cand.length) cand = pool;
+      const q = K.pick(cand);
+      S.mood.recent = recent.concat([q.t]).slice(-8);
+      K.Store.save();
+      return q;
+    },
+    healFlow(S) {
+      const pool = (D.HEALING || []).slice();
+      let cand = pool.filter(q => (S.mood.recent || []).indexOf(q.t) < 0);
+      if (cand.length < 6) cand = pool.slice();
+      for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = cand[i]; cand[i] = cand[j]; cand[j] = t; }
+      return cand.slice(0, 6);
     }
   };
 
@@ -498,6 +526,46 @@
           '<div class="legend"><span><i style="background:#FF9CC9"></i>月度完成度折线（待办 / 早睡 / 阅读 / 单词 综合）</span></div>'
       });
 
+      /* 月度完成度 · 四类独立曲线（早睡 / 存款 / 阅读 / 单词） */
+      (function () {
+        const days = K.monthDays(ms);
+        const dailySleep = days.map(d => {
+          const l = S.sleep.logs.find(x => x.date === d);
+          if (!l) return 0; return l.state === 'good' ? 100 : l.state === 'mid' ? 60 : 20;
+        });
+        const mGoal = S.savings.goal.annual > 0 ? Math.round(S.savings.goal.annual / 12) : 0;
+        const dimCount = K.daysInMonth(ms);
+        let cum = 0;
+        const dailySave = days.map(d => {
+          const s = D.savedTotal(r => r.date === d); cum += s;
+          if (mGoal <= 0) return cum > 0 ? 60 : 0;
+          return Math.min(100, Math.round(cum / (mGoal / dimCount) * 100));
+        });
+        const dailyRead = days.map(d => {
+          const m = S.reading.logs.filter(l => l.date === d).reduce((a, l) => a + K.num(l.minutes), 0);
+          return Math.min(100, Math.round(m / S.reading.dailyMin * 100));
+        });
+        const dailyWord = days.map(d => { const w = S.words.days[d]; return (w && w.checked) ? 100 : 0; });
+        h += UI.card({
+          icon: 'i-chart', title: '月度完成度 · 四类独立曲线',
+          body: '<div class="chart-box">' + K.Chart.line({
+            labels: days.map(K.mdShort),
+            series: [
+              { data: dailySleep, color: '#8FE3C4' },
+              { data: dailySave, color: '#F3C969' },
+              { data: dailyRead, color: '#B197F0' },
+              { data: dailyWord, color: '#7FC0F5' }
+            ], height: 190, max: 100, fmt: v => Math.round(v)
+          }) + '</div>' +
+          '<div class="legend">' +
+          '<span><i style="background:#8FE3C4"></i>早睡达标</span>' +
+          '<span><i style="background:#F3C969"></i>存款进度</span>' +
+          '<span><i style="background:#B197F0"></i>阅读时长</span>' +
+          '<span><i style="background:#7FC0F5"></i>单词打卡</span></div>' +
+          '<div class="hint" style="margin-top:6px">横轴为日期，纵轴为当日完成度（0–100%）。存款曲线为当月累计进度占比。</div>'
+        });
+      })();
+
       h += UI.card({
         icon: 'i-sparkle', title: '五项维度评级',
         body: dims.map(d => {
@@ -523,6 +591,10 @@
           '<div class="hint" style="margin-top:8px">未完成的目标需要填写「主观原因 + 客观原因」双重复盘。</div>'
       });
 
+      if (!R.summary) {
+        R.summary = '本月综合完成度 ' + overall + '%（评级 ' + rank + '）。早睡达标 ' + st.sleep.good + '/' + st.eff + ' 天；存款 ' + K.money(st.savings.saved) + (st.savings.goal > 0 ? ' / 目标 ' + K.money(Math.round(st.savings.goal)) : '') + '；阅读 ' + st.reading.min + ' 分钟；单词打卡 ' + st.words.days + '/' + st.eff + ' 天；心情均分 ' + st.mood.avg + '。' + (rank === 'S' || rank === 'A' ? '整体状态向好，记得好好犒劳自己。' : rank === 'B' ? '稳步前进，下月再推一把。' : '这个月辛苦了，先照顾好自己，进度之外你也很重要。');
+        K.Store.save();
+      }
       h += UI.card({
         icon: 'i-heart', title: '月度状态总结',
         extra: UI.tag(R.period, R.period === '高效期' ? 'mint' : R.period === '焦虑期' ? 'bad' : 'sky'),
