@@ -231,6 +231,8 @@
     loadNews(force) {
       const S = K.Store.data, box = $('#hotBox');
       const bundled = D.HOTSPOTS.map(x => Object.assign({ id: x.id, hot: 0, domain: '精选' }, x));
+      // 记录刷新前标题集合，用于提示用户实际变化（在清空缓存前保存）
+      const prevTitles = new Set((S.hot.list || []).map(x => String(x.title || '').trim()).filter(Boolean));
       // 迁移/修复：旧版本可能把内置精选写入 S.hot.list 导致永远只显示精选
       const isOnlyBundled = S.hot.list && S.hot.list.length && !S.hot.list.some(x => x.id && String(x.id).indexOf('live_') === 0);
       if (isOnlyBundled) { S.hot.list = []; S.hot.updated = 0; K.Store.save(); }
@@ -245,9 +247,9 @@
         { n: '知乎', domain: '知识', type: 'article', u: 'https://60s-api.viki.moe/v2/zhihu', timeout: 6000 },
         { n: '抖音', domain: '视频', type: 'video', u: 'https://60s-api.viki.moe/v2/douyin', timeout: 6000 },
         { n: '今日头条', domain: '新闻', type: 'article', u: 'https://60s-api.viki.moe/v2/toutiao', timeout: 6000 },
-        { n: '百度', domain: '综合', type: 'article', u: 'https://api.vvhan.com/api/hotlist/baiduRD', timeout: 4000 },
-        { n: '36氪', domain: '财经', type: 'article', u: 'https://api.vvhan.com/api/hotlist/36kr', timeout: 4000 },
-        { n: 'IT之家', domain: '科技', type: 'article', u: 'https://api.vvhan.com/api/hotlist/ithome', timeout: 4000 }
+        { n: '百度', domain: '综合', type: 'article', u: 'https://api.vvhan.com/api/hotlist/baiduRD', timeout: 6000 },
+        { n: '36氪', domain: '财经', type: 'article', u: 'https://api.vvhan.com/api/hotlist/36kr', timeout: 6000 },
+        { n: 'IT之家', domain: '科技', type: 'article', u: 'https://api.vvhan.com/api/hotlist/ithome', timeout: 6000 }
       ];
       const parseItem = (s, x) => ({
         title: (x.title || '').toString(),
@@ -288,7 +290,14 @@
         statusMeta.at = Date.now();
         if (live.length) {
           paintNow();
-          if (force) K.Toast('刷新完成：' + live.length + ' 条 · ' + statusMeta.ok + '/' + srcs.length + ' 个源');
+          if (force) {
+            const newTitles = live.filter(x => !prevTitles.has(String(x.title || '').trim())).length;
+            const sameTitles = live.length - newTitles;
+            const msg = newTitles > 0
+              ? '刷新完成：新增 ' + newTitles + ' 条 · 保留 ' + sameTitles + ' 条 · ' + statusMeta.ok + '/' + srcs.length + ' 个源'
+              : '刷新完成：当前 ' + live.length + ' 条 · 各源榜单暂无新变化 · ' + statusMeta.ok + '/' + srcs.length + ' 个源';
+            K.Toast(msg, 3500);
+          }
         } else {
           // 全部失败：在页面上给出明确提示和重试按钮，不要默默回退到旧缓存
           if (box) {
@@ -305,7 +314,8 @@
       };
       updateStatus();
       srcs.forEach((s, i) => {
-        K.fetchJSON(s.u, s.timeout || 6000).then(j => {
+        const url = s.u + (s.u.indexOf('?') > 0 ? '&' : '?') + '_t=' + Date.now();
+        K.fetchJSON(url, s.timeout || 6000).then(j => {
           let arr = (j && (j.data || j.Data)) ? (j.data || j.Data) : [];
           if (!Array.isArray(arr)) arr = Object.values(arr).filter(Boolean);
           arr.filter(x => x && (x.title || x.hot_value || x.hot_value_desc)).slice(0, 6).forEach((x, k) => {
