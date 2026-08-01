@@ -118,6 +118,16 @@
     },
     mount(root, App) {
       const S = K.Store.data;
+      // 版本校验：版本变更时清理可能被旧版本污染的热点缓存，确保刷新可用
+      const VER = window.APP_VER || 'v16';
+      if (S.__ver !== VER) {
+        S.__ver = VER;
+        const hl = S.hot && S.hot.list;
+        if (hl && hl.length && !hl.some(x => x.id && String(x.id).indexOf('live_') === 0)) {
+          S.hot.list = []; S.hot.updated = 0;
+        }
+        K.Store.save();
+      }
       // 时钟
       const tick = () => {
         const d = K.nowBJ();
@@ -131,12 +141,13 @@
       const cb = $('#cityBtn'); if (cb) cb.addEventListener('click', () => this.cityPicker(App));
       const nr = $('#newsRe'); if (nr) nr.addEventListener('click', () => this.loadNews(true));
       const hb = $('#hotBox'); if (hb) hb.addEventListener('click', e => {
+        const fav = e.target.closest('#hotFav');
+        if (fav) { this.openFav(); return; }
         const star = e.target.closest('.hot-star');
         if (star) { const it = (K.Store.data.hot.list || []).find(x => x.id === star.dataset.hid); if (it) this.toggleFav(it); return; }
         const c = e.target.closest('.hot-card');
         if (c) { const it = (K.Store.data.hot.list || []).find(x => x.id === c.dataset.hid); if (it) this.openHot(it); }
       });
-      const fb = $('#hotFav'); if (fb) fb.addEventListener('click', () => this.openFav());
       const hs = $('#homeSort');
       if (hs) hs.addEventListener('click', () => {
         const box = $('#homeCards'); box.classList.toggle('sorting-cards');
@@ -311,7 +322,7 @@
         '</div>';
       }).join('');
       h += '<div class="btn-row" style="margin-top:10px"><button class="btn sm soft" id="hotFav">我的收藏（' + favN + '）</button></div>';
-      h += '<div class="hint" style="margin-top:6px">来源：内置精选 + 全领域实时热榜（综合·知识·新闻·社会·财经·科技·影视·体育·视频）' + (stale ? '（离线缓存）' : '') + ' · 点击刷新按钮随时更新</div>';
+      h += '<div class="hint" style="margin-top:6px">来源：内置精选 + 全领域实时热榜（综合·知识·新闻·社会·财经·科技·影视·体育·视频）' + (stale ? '（离线缓存）' : '') + ' · 点击刷新按钮随时更新 · ' + (window.APP_VER || '') + '</div>';
       box.innerHTML = h;
     },
     openHot(item) {
