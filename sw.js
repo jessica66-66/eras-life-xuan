@@ -1,71 +1,25 @@
-/* Eras Life·璇 — Service Worker */
-const CACHE_NAME = "eras-life-xuan-v3";
-const CORE_FILES = [
-  "./",
-  "./index.html",
-  "./css/style.css",
-  "./js/core.js",
-  "./js/data.js",
-  "./js/mod-a.js",
-  "./js/mod-b.js",
-  "./js/sync.js",
-  "./js/app.js",
-  "./js/flow.js",
-  "./manifest.webmanifest",
-  "./favicon.svg",
-  "./icon-192.png",
-  "./icon-512.png"
-];
+/* Eras Life·璇 — Service Worker (v16)
+ * 自我注销型：安装后立刻清除所有可能残留的站点缓存并注销自己，
+ * 之后页面完全依赖网络请求（index.html 已设置 no-cache），杜绝旧版本缓存导致的「刷新无效 / B站iframe」等僵局。
+ * fetch 一律走网络，离线时再回退缓存（仅兜底，不主动缓存 HTML）。
+ */
+self.addEventListener('install', () => self.skipWaiting());
 
-self.addEventListener("install", (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_FILES))
-  );
-  self.skipWaiting();
+self.addEventListener('activate', (e) => {
+  e.waitUntil((async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    } catch (_) {}
+    try { await self.registration.unregister(); } catch (_) {}
+    try { await self.clients.claim(); } catch (_) {}
+  })());
 });
 
-self.addEventListener("activate", (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET') return;
+  // 全部走网络；仅在完全离线且缓存命中时回退（兜底，不主动缓存 HTML）
+  e.respondWith(
+    fetch(e.request).catch(() => caches.match(e.request))
   );
-  self.clients.claim();
-});
-
-self.addEventListener("fetch", (e) => {
-  const { request } = e;
-  const url = new URL(request.url);
-
-  // 页面导航：永远先拿网络最新版，离线才回退缓存
-  if (request.mode === "navigate") {
-    e.respondWith(
-      fetch(request, { cache: "reload" }).catch(() =>
-        caches.match(request).then((r) => r || caches.match("./index.html"))
-      )
-    );
-    return;
-  }
-
-  // 同域静态资源：缓存优先立即返回，同时后台更新缓存，兼顾速度与更新
-  if (url.origin === self.location.origin) {
-    e.respondWith(
-      caches.match(request).then((cached) => {
-        const network = fetch(request)
-          .then((resp) => {
-            if (resp && resp.status === 200) {
-              const clone = resp.clone();
-              caches.open(CACHE_NAME).then((c) => c.put(request, clone));
-            }
-            return resp;
-          })
-          .catch(() => cached);
-        return cached || network;
-      })
-    );
-    return;
-  }
-
-  // 跨域请求直接走网络
-  e.respondWith(fetch(request));
 });
