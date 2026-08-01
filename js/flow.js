@@ -181,7 +181,6 @@
   App.openVideo = function (item) {
     const v = item.video || item.url || '';
     const cover = item.cover || '';
-    const curated = item.id && item.id.indexOf('h_video_') === 0;
     let embed = '', kind = 'ext', bv = '';
     const m = v.match(/player\.bilibili\.com\/player\.html\?[^"'\s]*bvid=(BV[0-9A-Za-z]+)/i)
       || v.match(/bilibili\.com\/video\/(BV[0-9A-Za-z]+)/i)
@@ -197,8 +196,8 @@
     const extUrl = biliPageUrl || item.url || embed || v;
 
     let body;
-    if (kind === 'bili' && !curated) {
-      // 非精选 B 站视频：大量 UP 主关闭外链嵌入，直接给封面+去 B 站看，避免「暂不支持内嵌播放」
+    if (kind === 'bili') {
+      // B 站视频：大量 UP 主/平台关闭外链 iframe 嵌入，统一改为封面占位 + 跳转 B 站，彻底避免「暂不支持内嵌播放」
       body = '<div class="player">' +
         '<div class="player-frame">' +
           (cover ? '<img src="' + esc(cover) + '" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(.82)">' : '') +
@@ -209,20 +208,20 @@
         '</div>' +
         '<div class="player-foot">' +
           '<a class="btn primary full" href="' + esc(extUrl) + '" target="_blank" rel="noopener">去 B 站观看 ↗</a>' +
-          '<div class="hint" style="margin-top:8px">应用内无法播放时，点击上方按钮跳转到 B 站</div>' +
+          '<div class="hint" style="margin-top:8px">B 站限制外链内嵌，点击上方按钮到 B 站观看最稳定</div>' +
         '</div></div>';
-    } else if (kind === 'bili' || kind === 'yt') {
+    } else if (kind === 'yt') {
       body = '<div class="player">' +
         '<div class="player-frame"><div class="player-loading" id="pvLoad"><div class="spinner"></div><div class="hint">视频加载中…</div></div>' +
         '<div class="player-buf" id="pvBuf" style="display:none"><div class="spinner"></div><div class="hint">弱网缓冲中…</div></div>' +
         '<iframe id="pvIframe" src="' + esc(embed) + '" allow="autoplay; encrypted-media; fullscreen" allowfullscreen frameborder="0" style="opacity:0"></iframe>' +
         '<div class="player-fallback" id="pvFallback" style="display:none">' +
           '<div class="hint">视频没出来？可能是该视频关闭了内嵌播放</div>' +
-          '<a class="btn primary" href="' + esc(extUrl) + '" target="_blank" rel="noopener">去 B 站观看 ↗</a>' +
+          '<a class="btn primary" href="' + esc(extUrl) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' +
         '</div></div>' +
         '<div class="player-foot">' +
-          '<div class="hint">若提示「暂不支持内嵌播放」，请点击下方按钮到 B 站观看。</div>' +
-          '<a class="btn soft full" style="margin-top:8px" href="' + esc(extUrl) + '" target="_blank" rel="noopener">去 B 站观看 ↗</a>' +
+          '<div class="hint">若提示无法播放，请点击下方按钮到原平台观看。</div>' +
+          '<a class="btn soft full" style="margin-top:8px" href="' + esc(extUrl) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' +
         '</div></div>';
     } else if (kind === 'media') {
       body = '<div class="player"><div class="player-frame"><video id="pvMedia" controls playsinline preload="metadata" ' + (cover ? ('poster="' + esc(cover) + '"') : '') + ' style="width:100%;background:#000;max-height:60vh"><source src="' + esc(v) + '"></video></div>' +
@@ -237,9 +236,9 @@
     openFlow(body, { title: item.title });
     const root = document.getElementById('flowRoot');
     if (!root) return;
-    if (kind === 'bili' && !curated) {
-      // 外链按钮已带 href，无需额外绑定
-    } else if ((kind === 'bili' && curated) || kind === 'yt') {
+    if (kind === 'bili') {
+      // B 站统一跳转，无需 iframe 绑定
+    } else if (kind === 'yt') {
       const iframe = root.querySelector('#pvIframe');
       const load = root.querySelector('#pvLoad');
       const fallback = root.querySelector('#pvFallback');
