@@ -274,7 +274,7 @@
         std: { bed: '23:00', focus: '22:40', wake: '07:00', redline: '23:30' },
         logs: [], rewards: { mvUnlocked: false, lastUnlock: '' }, penalties: {}
       },
-      mood: { logs: [], favs: [], recent: [] },
+      mood: { logs: [], favs: [], recent: [], heal: [] },
       review: { months: {} },
       customData: {},
       weatherCache: null, newsCache: null,
