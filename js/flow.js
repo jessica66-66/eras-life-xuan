@@ -156,35 +156,149 @@
         (item.url ? '<p style="margin-top:14px"><a class="btn soft" href="' + esc(item.url) + '" target="_blank" rel="noopener">阅读原文 ↗</a></p>' : '') + '</div>';
       openFlow(html, { title: item.title });
     }
-    recordHot(item);
   };
 
-  /* ---------- 视频播放器 ---------- */
+  /* ---------- 图标 ---------- */
+  const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  const STAR_BIG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.5 1.3 6.5L12 17.8 6.1 20.9l1.3-6.5L2.5 9.9l6.6-.8z"/></svg>';
+
+  /* ---------- 视频播放器（自适应 / 弱网缓冲 / 失败重试 / 占位图） ---------- */
+  function showBuffer(root, on) {
+    const b = root.querySelector('#pvBuf'); if (!b) return;
+    b.style.display = on ? 'flex' : 'none';
+  }
+  function showPlayerError(root, src, item) {
+    const frame = root.querySelector('.player-frame'); if (!frame) return;
+    frame.innerHTML = '<div class="player-ph">' +
+      '<div class="ph-icon">' + PLAY_ICON + '</div>' +
+      '<div class="hint">视频加载失败</div>' +
+      '<button class="btn soft" id="pvRetry">重试</button>' +
+      (item.url ? '<a class="btn primary full" style="margin-top:8px" href="' + esc(item.url) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' : '') +
+      '</div>';
+    const r = frame.querySelector('#pvRetry'); if (r) r.onclick = () => { App.openVideo(item); };
+  }
   App.openVideo = function (item) {
-    const html = '<div class="player">' +
-      '<div class="player-frame"><iframe src="' + esc(item.video) + '" allow="autoplay; encrypted-media; fullscreen" allowfullscreen frameborder="0"></iframe></div>' +
-      '<div class="player-foot">' +
-        '<div class="hint">若播放器无法加载（多为网络限制），可点击下方在浏览器打开。</div>' +
-        (item.url ? '<a class="btn soft full" style="margin-top:8px" href="' + esc(item.url) + '" target="_blank" rel="noopener">在浏览器打开 ↗</a>' : '') +
-        '<a class="btn soft full" style="margin-top:8px" href="' + esc(item.video) + '" target="_blank" rel="noopener">在新窗口打开视频 ↗</a>' +
-      '</div></div>';
-    openFlow(html, { title: item.title });
-    recordHot(item);
+    const v = item.video || item.url || '';
+    const cover = item.cover || '';
+    let embed = '', kind = 'ext';
+    const m = v.match(/player\.bilibili\.com\/player\.html\?[^"'\s]*bvid=(BV[0-9A-Za-z]+)/i)
+      || v.match(/bilibili\.com\/video\/(BV[0-9A-Za-z]+)/i)
+      || v.match(/\b(BV[0-9A-Za-z]+)\b/i);
+    if (m) { const bv = m[1] || m[2] || m[3]; embed = 'https://player.bilibili.com/player.html?bvid=' + bv + '&page=1&high_quality=1&danmaku=0&autoplay=1'; kind = 'bili'; }
+    else if (/youtube\.com\/embed\/|youtu\.be\//i.test(v)) { embed = v; kind = 'yt'; }
+    else if (/\.(mp4|webm|m3u8|ogg)(\?|$)/i.test(v)) { kind = 'media'; }
+
+    let body;
+    if (kind === 'bili' || kind === 'yt') {
+      body = '<div class="player">' +
+        '<div class="player-frame"><div class="player-loading" id="pvLoad"><div class="spinner"></div><div class="hint">视频加载中…</div></div>' +
+        '<div class="player-buf" id="pvBuf" style="display:none"><div class="spinner"></div><div class="hint">弱网缓冲中…</div></div>' +
+        '<iframe id="pvIframe" src="' + esc(embed) + '" allow="autoplay; encrypted-media; fullscreen" allowfullscreen frameborder="0" style="opacity:0"></iframe></div>' +
+        '<div class="player-foot"><div class="hint">弱网环境加载较慢，请稍候；长时间无画面可重试或去原平台。</div>' +
+        (item.url && item.url !== embed ? '<a class="btn soft full" style="margin-top:8px" href="' + esc(item.url) + '" target="_blank" rel="noopener">在浏览器打开 ↗</a>' : '<a class="btn soft full" style="margin-top:8px" href="' + esc(embed) + '" target="_blank" rel="noopener">在新窗口打开视频 ↗</a>') +
+        '</div></div>';
+    } else if (kind === 'media') {
+      body = '<div class="player"><div class="player-frame"><video id="pvMedia" controls playsinline preload="metadata" ' + (cover ? ('poster="' + esc(cover) + '"') : '') + ' style="width:100%;background:#000;max-height:60vh"><source src="' + esc(v) + '"></video></div>' +
+        '<div class="player-foot"><div class="hint">若无法播放，可去原平台查看。</div>' +
+        (item.url ? '<a class="btn soft full" style="margin-top:8px" href="' + esc(item.url) + '" target="_blank" rel="noopener">在浏览器打开 ↗</a>' : '') + '</div></div>';
+    } else {
+      body = '<div class="player"><div class="player-ph">' +
+        (cover ? '<img src="' + esc(cover) + '" alt="">' : '<div class="ph-icon">' + PLAY_ICON + '</div>') +
+        '<div class="hint">该视频暂不支持内嵌播放</div></div>' +
+        '<div class="player-foot">' + (item.url ? '<a class="btn primary full" href="' + esc(item.url) + '" target="_blank" rel="noopener">去原平台观看 ↗</a>' : '') + '</div></div>';
+    }
+    openFlow(body, { title: item.title });
+    const root = document.getElementById('flowRoot');
+    if (!root) return;
+    if (kind === 'bili' || kind === 'yt') {
+      const iframe = root.querySelector('#pvIframe');
+      const load = root.querySelector('#pvLoad');
+      if (iframe) {
+        const done = () => { if (load) load.style.display = 'none'; iframe.style.opacity = '1'; };
+        iframe.onload = done;
+        iframe.onerror = () => showPlayerError(root, embed, item);
+        setTimeout(() => { if (load && load.style.display !== 'none') { load.style.display = 'none'; iframe.style.opacity = '1'; } }, 7000);
+        setTimeout(() => { if (load && load.style.display !== 'none') showPlayerError(root, embed, item); }, 12000);
+      }
+    } else if (kind === 'media') {
+      const media = root.querySelector('#pvMedia');
+      if (media) {
+        media.addEventListener('waiting', () => showBuffer(root, true));
+        media.addEventListener('playing', () => showBuffer(root, false));
+        media.addEventListener('canplay', () => showBuffer(root, false));
+        media.addEventListener('error', () => showPlayerError(root, v, item));
+      }
+    }
   };
 
   /* ---------- 无内嵌地址的外链（live 视频/文章，去原平台打开） ---------- */
   App.openExternal = function (item) {
-    recordHot(item);
     if (item.url) window.open(item.url, '_blank', 'noopener');
     else App.openArticle(item);
   };
 
-  /* ---------- 浏览历史 ---------- */
-  function recordHot(item) {
-    const S = K.Store.data;
-    S.hot.history = (S.hot.history || []).filter(h => h.id !== item.id);
-    S.hot.history.unshift({ id: item.id, title: item.title, type: item.type, at: K.dstr() });
-    if (S.hot.history.length > 40) S.hot.history.length = 40;
-    K.Store.save();
-  }
+  /* ---------- 我的收藏 ---------- */
+  App.openFavItem = function (it) {
+    if (it.type === 'video') App.openVideo(it);
+    else App.openArticle(it);
+  };
+  App.openFav = function () {
+    const S = K.Store.data; S.fav = S.fav || { list: [] };
+    let tab = 'all';
+    const sel = {};
+    const paint = () => {
+      const list = S.fav.list.filter(f => tab === 'all' ? true : (f.type === (tab === 'video' ? 'video' : 'article')));
+      let body;
+      if (!S.fav.list.length) {
+        body = '<div class="fav-empty"><div class="ph-icon big">' + STAR_BIG + '</div><div class="hint">收藏喜欢的视频 / 文章，在这里快速查看</div></div>';
+      } else if (!list.length) {
+        body = '<div class="fav-empty"><div class="hint">该分类下还没有收藏</div></div>';
+      } else {
+        body = '<div class="fav-grid">' + list.map(f => {
+          const on = sel[f.id] ? ' on' : '';
+          return '<div class="fav-card' + (f.type === 'video' ? ' v' : '') + (on ? ' sel' : '') + '" data-fid="' + esc(f.id) + '">' +
+            '<button class="fav-check' + on + '" data-fid="' + esc(f.id) + '">' + (on ? '✓' : '') + '</button>' +
+            '<button class="fav-del" data-fid="' + esc(f.id) + '" aria-label="删除">×</button>' +
+            '<span class="hot-badge ' + (f.type === 'video' ? 'v' : 'a') + '">' + (f.type === 'video' ? '▶ 视频' : '文章') + '</span>' +
+            (f.domain && f.domain !== '精选' ? '<span class="hot-dom">' + esc(f.domain) + '</span>' : '') +
+            '<div class="fav-tt">' + esc(f.title) + '</div>' +
+          '</div>';
+        }).join('') + '</div>';
+      }
+      const tabs = '<div class="fav-tabs">' +
+        '<button class="ft' + (tab === 'all' ? ' on' : '') + '" data-t="all">全部</button>' +
+        '<button class="ft' + (tab === 'video' ? ' on' : '') + '" data-t="video">视频</button>' +
+        '<button class="ft' + (tab === 'article' ? ' on' : '') + '" data-t="article">文章</button>' +
+        '</div>';
+      const selN = Object.keys(sel).length;
+      const bar = '<div class="fav-actions">' +
+        '<span class="hint">已选 ' + selN + ' 项</span>' +
+        '<button class="btn sm soft" id="favCancel"' + (selN ? '' : ' disabled') + '>取消收藏</button>' +
+        '</div>';
+      openFlow(tabs + body + bar, { title: '我的收藏（' + S.fav.list.length + '）' });
+      bindFav();
+    };
+    const bindFav = () => {
+      const root = document.getElementById('flowRoot'); if (!root) return;
+      root.querySelectorAll('.fav-tabs .ft').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
+      root.querySelectorAll('.fav-card').forEach(c => c.onclick = e => {
+        if (e.target.closest('.fav-del') || e.target.closest('.fav-check')) return;
+        const it = S.fav.list.find(f => f.id === c.dataset.fid); if (it) App.openFavItem(it);
+      });
+      root.querySelectorAll('.fav-del').forEach(b => b.onclick = e => {
+        e.stopPropagation();
+        S.fav.list = S.fav.list.filter(f => f.id !== b.dataset.fid); delete sel[b.dataset.fid]; K.Store.save(); paint();
+      });
+      root.querySelectorAll('.fav-check').forEach(b => b.onclick = e => {
+        e.stopPropagation();
+        if (sel[b.dataset.fid]) delete sel[b.dataset.fid]; else sel[b.dataset.fid] = 1; paint();
+      });
+      const cancel = root.querySelector('#favCancel'); if (cancel) cancel.onclick = () => {
+        const ids = Object.keys(sel); if (!ids.length) return;
+        S.fav.list = S.fav.list.filter(f => ids.indexOf(f.id) < 0); ids.forEach(id => delete sel[id]); K.Store.save();
+        K.Toast('已取消收藏 ' + ids.length + ' 项'); paint();
+      };
+    };
+    paint();
+  };
 })(window);
