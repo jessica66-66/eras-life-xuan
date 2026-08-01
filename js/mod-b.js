@@ -367,11 +367,17 @@
           '<div class="btn-row"><button class="btn soft" id="qFav">' + ico('i-heart', 'sm') + ' 收藏这句</button></div>'
       });
       const flow = this.healFlow(S);
+      const myHeal = S.mood.heal || [];
+      const baseN = (D.HEALING || []).length;
       h += UI.card({
         icon: 'i-book', title: '治愈金句库 · 随便翻翻',
         extra: '<button class="btn xs ghost" id="qFlow">换一批</button>',
-        body: flow.map(q => '<div class="quote sm">' + esc(q.t) + '<div class="qm">—— ' + esc(q.a) + ' · ' + esc(q.cat) + '</div></div>').join('') +
-          '<div class="hint" style="margin-top:6px">素材覆盖诗词 / 文学 / 影视 / 散文 / 心理 / 治愈，随机推送、减少重复。</div>'
+        body: flow.map(q => '<div class="quote sm">' + esc(q.t) + '<div class="qm">—— ' + esc(q.a || '佚名') + ' · ' + esc(q.cat) + (q.mine ? ' · 我的' : '') + '</div></div>').join('') +
+          '<div class="hint" style="margin-top:6px">内置 ' + baseN + ' 句 + 我的 ' + myHeal.length + ' 句 = 共 ' + (baseN + myHeal.length) + ' 句，随机推送、减少重复。想加更多？点下面的「添加我的金句」。</div>' +
+          (myHeal.length ? '<div class="sub-h" style="margin-top:12px">我的金句 · ' + myHeal.length + ' 句</div>' + myHeal.map(q =>
+            '<div class="li" style="display:block"><div class="quote sm" style="background:rgba(255,255,255,.6)">' + esc(q.t) + '<div class="qm">—— ' + esc(q.a || '我') + ' · ' + esc(q.cat) + '</div></div>' +
+            '<div style="text-align:right;margin-top:6px"><button class="btn xs ghost" data-delh="' + esc(q.id) + '">删除</button></div></div>').join('') : '') +
+          '<button class="btn sm soft full" id="qAdd" style="margin-top:10px">＋ 添加我的金句</button>'
       });
 
       h += '<div class="seg" id="mdTab">' +
@@ -436,6 +442,10 @@
         S.mood.favs.push({ id: K.uid(), t: hq.t, a: hq.a, at: today }); K.Store.save(); K.Toast('已收藏 🤍'); App.render();
       });
       const qfl = $('#qFlow', root); if (qfl) qfl.addEventListener('click', () => App.render());
+      const qa = $('#qAdd', root); if (qa) qa.addEventListener('click', () => this.addHeal(App));
+      $$('[data-delh]', root).forEach(b => b.addEventListener('click', () => {
+        S.mood.heal = (S.mood.heal || []).filter(q => q.id !== b.dataset.delh); K.Store.save(); K.Toast('已删除'); App.render();
+      }));
       $$('[data-df]', root).forEach(b => b.addEventListener('click', () => {
         S.mood.favs = S.mood.favs.filter(f => f.id !== b.dataset.df); K.Store.save(); App.render();
       }));
@@ -465,7 +475,7 @@
     },
     /* 治愈金句：扩展素材库 + 随机降重 */
     healPick(S) {
-      const pool = D.HEALING || [];
+      const pool = this.allHeal(S);
       const recent = S.mood.recent || [];
       let cand = pool.filter(q => recent.indexOf(q.t) < 0);
       if (!cand.length) cand = pool;
@@ -475,11 +485,36 @@
       return q;
     },
     healFlow(S) {
-      const pool = (D.HEALING || []).slice();
+      const pool = this.allHeal(S);
       let cand = pool.filter(q => (S.mood.recent || []).indexOf(q.t) < 0);
       if (cand.length < 6) cand = pool.slice();
       for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = cand[i]; cand[i] = cand[j]; cand[j] = t; }
       return cand.slice(0, 6);
+    },
+    /* 合并素材池：内置 HEALING + 用户自定义 heal，构成无限金句库 */
+    allHeal(S) {
+      const base = (D.HEALING || []).map(q => ({ cat: q.cat, t: q.t, a: q.a, mine: false }));
+      const mine = (S.mood.heal || []).map(q => ({ cat: q.cat, t: q.t, a: q.a, mine: true }));
+      return base.concat(mine);
+    },
+    /* 添加我的金句（无限扩充） */
+    addHeal(App) {
+      const S = K.Store.data;
+      K.Sheet.form({
+        title: '添加我的金句',
+        fields: [
+          { k: 't', label: '句子内容', type: 'textarea', required: true, placeholder: '写下想收藏的那句话…' },
+          { k: 'cat', label: '分类', type: 'select', value: '治愈', options: ['诗词', '文学', '影视', '散文', '心理', '治愈', '自定义'].map(c => ({ v: c, t: c })) },
+          { k: 'a', label: '出处 / 作者（可选）', type: 'text', placeholder: '如：佚名 / 我' }
+        ],
+        submitText: '保存进金句库',
+        onSubmit: v => {
+          if (!v.t || !v.t.trim()) { K.Toast('句子内容不能为空'); return; }
+          S.mood.heal = S.mood.heal || [];
+          S.mood.heal.unshift({ id: K.uid(), t: v.t.trim(), cat: v.cat || '治愈', a: (v.a || '').trim() || '我' });
+          K.Store.save(); K.Toast('已加入金句库 ✦'); App.render();
+        }
+      });
     }
   };
 
