@@ -219,8 +219,10 @@
     loadNews(force) {
       const S = K.Store.data, box = $('#hotBox');
       const cache = S.hot;
-      if (!force && cache.list && cache.list.length && Date.now() - (cache.updated || 0) < 30 * 60000) { this.paintHot(cache.list, false); return; }
+      // 不限制刷新频率：手动刷新随时可用；非强制场景下若有缓存先展示，避免白屏
+      if (!force && cache.list && cache.list.length) { this.paintHot(cache.list, false); return; }
       if (box) box.innerHTML = '<div class="hint">正在获取今日全领域热点…</div>';
+      const nr = $('#newsRe'); if (nr) { nr.disabled = true; nr.textContent = '刷新中'; }
       if (force) K.Toast('刷新中…');
       const bundled = D.HOTSPOTS.map(x => Object.assign({ id: x.id, hot: 0, domain: '精选' }, x));
       // 主源：60s-api（国内可达，返回 hot_value）；副源：vvhan（补充广度）
@@ -256,16 +258,20 @@
       };
       const live = [];
       let done = 0;
+      const restoreBtn = () => { const nr = $('#newsRe'); if (nr) { nr.disabled = false; nr.textContent = '刷新'; } };
       const finish = () => {
         if (done < srcs.length) return;
+        restoreBtn();
         if (live.length) {
           const sorted = live.slice().sort((a, b) => (b.hot || 0) - (a.hot || 0));
           const merged = bundled.concat(sorted);
           S.hot.list = merged; S.hot.updated = Date.now(); K.Store.save();
           this.paintHot(merged, false);
+          if (force) K.Toast('刷新完成');
         } else {
-          S.hot.list = bundled; S.hot.updated = Date.now(); K.Store.save();
-          this.paintHot(bundled, true);
+          // 接口全部失败：保留旧缓存（如有），避免用 bundled 覆盖并刷新 updated 导致缓存陷阱
+          const fallback = (S.hot.list && S.hot.list.length) ? S.hot.list : bundled;
+          this.paintHot(fallback, true);
           if (force) K.Toast('刷新失败，请检查网络');
         }
       };
@@ -280,9 +286,14 @@
           });
         }).catch(() => {}).then(() => { done++; finish(); });
       });
-      // 兜底：全部接口超时且无任何数据 → 回退内置精选
+      // 兜底：全部接口超时且无任何数据 → 回退旧缓存/内置精选，不更新 updated 避免缓存陷阱
       setTimeout(() => {
-        if (done < srcs.length && live.length === 0) { S.hot.list = bundled; S.hot.updated = Date.now(); K.Store.save(); this.paintHot(bundled, true); }
+        if (done < srcs.length && live.length === 0) {
+          restoreBtn();
+          const fallback = (S.hot.list && S.hot.list.length) ? S.hot.list : bundled;
+          this.paintHot(fallback, true);
+          if (force) K.Toast('刷新失败，请检查网络');
+        }
       }, 9000);
     },
     paintHot(list, stale) {
@@ -306,7 +317,7 @@
         '</div>';
       }).join('');
       h += '<div class="btn-row" style="margin-top:10px"><button class="btn sm soft" id="hotFav">我的收藏（' + favN + '）</button></div>';
-      h += '<div class="hint" style="margin-top:6px">来源：内置精选 + 全领域实时热榜（综合·知识·新闻·社会·财经·科技·影视·体育·视频）' + (stale ? '（离线缓存）' : '') + ' · 每 30 分钟更新</div>';
+      h += '<div class="hint" style="margin-top:6px">来源：内置精选 + 全领域实时热榜（综合·知识·新闻·社会·财经·科技·影视·体育·视频）' + (stale ? '（离线缓存）' : '') + ' · 点击刷新按钮随时更新</div>';
       box.innerHTML = h;
     },
     openHot(item) {
