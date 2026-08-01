@@ -169,10 +169,10 @@
       ] },
     { id: 'h_video_1', type: 'video', tag: '放松电台', title: '治愈 Lo-Fi 放松电台 · 学习 / 睡前',
       summary: '一边听一边读，让节奏慢下来。',
-      video: 'https://www.youtube.com/embed/jfKfPfyJRdk' },
+      video: 'https://player.bilibili.com/player.html?bvid=BV1Ei4y1j7CG&page=1&high_quality=1&danmaku=0&autoplay=1' },
     { id: 'h_video_2', type: 'video', tag: '自然白噪', title: '窗外雨声 · 助眠白噪音',
       summary: '关灯，戴上耳机，让雨声替你按暂停。',
-      video: 'https://www.youtube.com/embed/5qap5aO4i9A' }
+      video: 'https://player.bilibili.com/player.html?bvid=BV1ji4y1Y77p&page=1&high_quality=1&danmaku=0&autoplay=1' }
   ];
 
   /* ---------- 心情模块：治愈金句素材库（跨来源，随机降重） ---------- */
@@ -278,7 +278,8 @@
       review: { months: {} },
       customData: {},
       weatherCache: null, newsCache: null,
-      hot: { list: [], history: [], updated: 0 }
+      hot: { list: [], updated: 0 },
+      fav: { list: [] }
     };
   }
 
