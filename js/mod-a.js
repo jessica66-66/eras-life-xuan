@@ -5,6 +5,24 @@
   'use strict';
   const K = w.Core, D = w.D, $ = K.$, $$ = K.$$, esc = K.esc, ico = K.ico;
 
+  /* 热度值解析与格式化（vvhan 返回数字或「123万」字符串） */
+  function toNumHot(v) {
+    if (v == null) return 0;
+    if (typeof v === 'number') return v;
+    const s = String(v).replace(/[, ]/g, '');
+    if (/亿/.test(s)) return parseFloat(s) * 1e8;
+    if (/万/.test(s)) return parseFloat(s) * 1e4;
+    const n = parseFloat(s);
+    return isFinite(n) ? n : 0;
+  }
+  function fmtHot(v) {
+    v = toNumHot(v);
+    if (!v) return '';
+    if (v >= 1e8) return (v / 1e8).toFixed(1).replace(/\.0$/, '') + '亿';
+    if (v >= 1e4) return (v / 1e4).toFixed(1).replace(/\.0$/, '') + '万';
+    return String(v);
+  }
+
   /* ---------- 通用 UI 片段 ---------- */
   const UI = {
     card(opts) {
@@ -65,7 +83,7 @@
           });
         case 'news':
           return UI.card({
-            sort: 'news', icon: 'i-news', title: '实时热点 · 文章 / 视频', cls: 'tex-news',
+            sort: 'news', icon: 'i-news', title: '全领域实时热点 · 文章 / 视频', cls: 'tex-news',
             extra: '<button class="btn xs ghost" id="newsRe">刷新</button>',
             body: '<div id="hotBox"><div class="hint">正在获取今日热点…</div></div>'
           });
@@ -194,49 +212,78 @@
         }
       });
     },
-    /* 实时热点（文章 / 视频，点击进入内置阅读器 / 播放器，自动记录浏览历史） */
+    /* 实时热点（全领域文章 / 视频，显示热度值，点击进入内置阅读器 / 播放器，自动记录浏览历史） */
     loadNews(force) {
       const S = K.Store.data, box = $('#hotBox');
       const cache = S.hot;
       if (!force && cache.list && cache.list.length && Date.now() - (cache.updated || 0) < 30 * 60000) { this.paintHot(cache.list, false); return; }
-      if (box) box.innerHTML = '<div class="hint">正在获取今日热点…</div>';
-      const bundled = D.HOTSPOTS.map(x => Object.assign({ id: x.id }, x));
+      if (box) box.innerHTML = '<div class="hint">正在获取今日全领域热点…</div>';
+      const bundled = D.HOTSPOTS.map(x => Object.assign({ id: x.id, hot: 0, domain: '精选' }, x));
       const srcs = [
-        { n: '微博热榜', u: 'https://api.vvhan.com/api/hotlist/wbHot', p: j => (j && j.data ? j.data : []).map(x => ({ t: x.title, u: x.url || x.mobil_url || '' })) },
-        { n: '百度热榜', u: 'https://api.vvhan.com/api/hotlist/baiduRD', p: j => (j && j.data ? j.data : []).map(x => ({ t: x.title, u: x.url || '' })) }
+        { n: '微博', domain: '综合', type: 'article', u: 'https://api.vvhan.com/api/hotlist/wbHot' },
+        { n: '百度', domain: '综合', type: 'article', u: 'https://api.vvhan.com/api/hotlist/baiduRD' },
+        { n: '知乎', domain: '知识', type: 'article', u: 'https://api.vvhan.com/api/hotlist/zhihu' },
+        { n: '今日头条', domain: '新闻', type: 'article', u: 'https://api.vvhan.com/api/hotlist/toutiao' },
+        { n: '微信', domain: '社会', type: 'article', u: 'https://api.vvhan.com/api/hotlist/wx' },
+        { n: '36氪', domain: '财经', type: 'article', u: 'https://api.vvhan.com/api/hotlist/36kr' },
+        { n: 'IT之家', domain: '科技', type: 'article', u: 'https://api.vvhan.com/api/hotlist/ithome' },
+        { n: '豆瓣', domain: '影视', type: 'article', u: 'https://api.vvhan.com/api/hotlist/douban' },
+        { n: '虎扑', domain: '体育', type: 'article', u: 'https://api.vvhan.com/api/hotlist/hotzh' },
+        { n: 'B站', domain: '视频', type: 'video', u: 'https://api.vvhan.com/api/hotlist/bili' },
+        { n: '抖音', domain: '视频', type: 'video', u: 'https://api.vvhan.com/api/hotlist/douyin' }
       ];
-      const tryOne = i => {
-        if (i >= srcs.length) {
-          S.hot.list = bundled; S.hot.updated = Date.now(); K.Store.save();
-          this.paintHot(bundled, false); return;
-        }
-        K.fetchJSON(srcs[i].u, 7000).then(j => {
-          const live = srcs[i].p(j).filter(x => x && x.t).slice(0, 6)
-            .map(x => ({ id: 'live_' + i + '_' + K.uid(), type: 'article', title: x.t, url: x.u, summary: '', tag: srcs[i].n }));
-          const merged = bundled.concat(live);
-          S.hot.list = merged; S.hot.updated = Date.now(); K.Store.save();
-          this.paintHot(merged, false);
-        }).catch(() => tryOne(i + 1));
+      const live = [];
+      let done = 0;
+      const finish = () => {
+        if (done < srcs.length) return;
+        const sorted = live.slice().sort((a, b) => (b.hot || 0) - (a.hot || 0));
+        const merged = bundled.concat(sorted);
+        S.hot.list = merged; S.hot.updated = Date.now(); K.Store.save();
+        this.paintHot(merged, false);
       };
-      tryOne(0);
+      srcs.forEach((s, i) => {
+        K.fetchJSON(s.u, 6000).then(j => {
+          let arr = (j && j.data) ? j.data : [];
+          if (!Array.isArray(arr)) arr = Object.values(arr).filter(Boolean);
+          arr.filter(x => x && (x.title || x.hot)).slice(0, 6).forEach((x, k) => {
+            live.push({
+              id: 'live_' + i + '_' + k + '_' + K.uid(),
+              type: s.type, domain: s.domain, source: s.n,
+              title: (x.title || x.hot || x.name || '').toString(),
+              url: x.url || x.mobil_url || x.mobileUrl || '',
+              hot: toNumHot(x.hot || x.num || x.hotNum),
+              summary: '', tag: s.domain, content: null
+            });
+          });
+        }).catch(() => {}).then(() => { done++; finish(); });
+      });
+      setTimeout(() => {
+        if (done < srcs.length && live.length === 0) { S.hot.list = bundled; S.hot.updated = Date.now(); K.Store.save(); this.paintHot(bundled, true); }
+      }, 9000);
     },
     paintHot(list, stale) {
       const box = $('#hotBox'); if (!box) return;
       const hist = (K.Store.data.hot.history || []).length;
-      let h = list.map(x =>
-        '<div class="hot-card" data-hid="' + esc(x.id) + '">' +
-          '<span class="hot-badge ' + (x.type === 'video' ? 'v' : 'a') + '">' + (x.type === 'video' ? '▶ 视频' : '文章') + '</span>' +
+      let h = list.map(x => {
+        const typeBadge = '<span class="hot-badge ' + (x.type === 'video' ? 'v' : 'a') + '">' + (x.type === 'video' ? '▶ 视频' : '文章') + '</span>';
+        const dom = (x.domain && x.domain !== '精选') ? '<span class="hot-dom">' + esc(x.domain) + '</span>' : '';
+        let heat = '';
+        if (x.hot) heat = '<span class="hot-heat">热度 ' + fmtHot(x.hot) + '</span>';
+        else if (x.domain === '精选') heat = '<span class="hot-dom sel">编辑精选</span>';
+        return '<div class="hot-card" data-hid="' + esc(x.id) + '">' +
+          '<div class="hot-top">' + typeBadge + dom + heat + '</div>' +
           '<div class="hot-tt">' + esc(x.title) + '</div>' +
           (x.summary ? '<div class="hot-ds">' + esc(x.summary) + '</div>' : '') +
-          (x.tag ? '<div class="hot-tag">' + esc(x.tag) + '</div>' : '') +
-        '</div>').join('');
+        '</div>';
+      }).join('');
       h += '<div class="btn-row" style="margin-top:10px"><button class="btn sm soft" id="hotHist">浏览历史（' + hist + '）</button></div>';
-      h += '<div class="hint" style="margin-top:6px">来源：内置精选 + 实时热榜' + (stale ? '（离线缓存）' : '') + ' · 每 30 分钟更新</div>';
+      h += '<div class="hint" style="margin-top:6px">来源：内置精选 + 全领域实时热榜（综合·知识·新闻·社会·财经·科技·影视·体育·视频）' + (stale ? '（离线缓存）' : '') + ' · 每 30 分钟更新</div>';
       box.innerHTML = h;
     },
     openHot(item) {
-      if (item.type === 'video') App.openVideo(item);
-      else App.openArticle(item);
+      if (item.type === 'video' && item.video) { App.openVideo(item); return; }
+      if (item.type === 'video') { App.openExternal(item); return; }
+      App.openArticle(item);
     },
     hotHistory() {
       const S = K.Store.data, hist = (S.hot.history || []).slice();
