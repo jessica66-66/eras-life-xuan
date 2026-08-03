@@ -45,11 +45,13 @@
           '<button class="btn primary full" style="margin-top:10px" id="svGoal2">立即设置目标</button>'
       });
 
+      const funds = D.allFunds();
       h += UI.card({
         icon: 'i-sparkle', title: '专项基金',
-        body: D.FUNDS.map(f => {
+        extra: '<button class="btn xs ghost" id="svFunds">类目管理</button>',
+        body: funds.map(f => {
           const v = D.savedTotal(r => (r.fund || 'common') === f.id);
-          const mx = Math.max(1, D.FUNDS.reduce((m, x) => Math.max(m, D.savedTotal(r => (r.fund || 'common') === x.id)), 1));
+          const mx = Math.max(1, funds.reduce((m, x) => Math.max(m, D.savedTotal(r => (r.fund || 'common') === x.id)), 1));
           return '<div style="margin-bottom:9px"><div class="prow"><span>' + ico(f.icon, 'sm') + ' ' + esc(f.name) + '</span><b>' + K.money(v) + '</b></div>' +
             '<div class="pbar thin"><i style="width:' + K.pct(v, mx) + '%;background:' + f.c + '"></i></div></div>';
         }).join('') + '<div class="hint">分项独立统计，存入时选择对应基金即可自动归类。</div>'
@@ -83,7 +85,7 @@
         body: recent.length ? recent.map(r =>
           '<div class="li"><div class="li-main"><div class="li-t">' +
           (r.kind === 'save' ? '存入' : r.kind === 'in' ? '收入' : '支出') + ' ' + K.money(r.amount) + '</div>' +
-          '<div class="li-s">' + UI.tag(r.date, 'grey') + UI.tag(esc(r.cat || (r.fund ? (D.FUNDS.find(f => f.id === r.fund) || {}).name : '')), r.kind === 'out' ? 'bad' : r.kind === 'in' ? 'mint' : 'lilac') +
+          '<div class="li-s">' + UI.tag(r.date, 'grey') + UI.tag(esc(r.cat || (r.fund ? (D.allFunds().find(f => f.id === r.fund) || {}).name : '')), r.kind === 'out' ? 'bad' : r.kind === 'in' ? 'mint' : 'lilac') +
           (r.note ? '<span style="color:var(--ink-3)">' + esc(r.note.slice(0, 16)) + '</span>' : '') + '</div></div>' +
           '<div class="li-act"><button class="mini-btn del" data-dr="' + r.id + '">' + ico('i-close') + '</button></div></div>').join('')
           : UI.empty('还没有记账记录')
@@ -110,6 +112,7 @@
       const a = $('#svSave', root); if (a) a.addEventListener('click', () => this.rec(App, 'save'));
       const b1 = $('#svIn', root); if (b1) b1.addEventListener('click', () => this.rec(App, 'in'));
       const b2 = $('#svOut', root); if (b2) b2.addEventListener('click', () => this.rec(App, 'out'));
+      const bf = $('#svFunds', root); if (bf) bf.addEventListener('click', () => this.manageFunds(App));
       $$('[data-go]', root).forEach(x => x.addEventListener('click', () => App.go(x.dataset.go)));
       $$('[data-dr]', root).forEach(x => x.addEventListener('click', () => {
         S.savings.records = S.savings.records.filter(r => r.id !== x.dataset.dr); K.Store.save(); App.render();
@@ -133,6 +136,69 @@
         }
       });
     },
+    manageFunds(App) {
+      const V = K.Store.data.savings;
+      const renderList = (api) => {
+        const list = D.allFunds();
+        const html = list.map(f => {
+          const isBase = D.FUNDS.some(b => b.id === f.id);
+          return '<div class="fund-row" data-fid="' + f.id + '">' +
+            '<div class="fund-info">' + ico(f.icon, 'sm') + '<span>' + esc(f.name) + '</span>' + (isBase ? UI.tag('基础', 'sky') : UI.tag('自定义', 'lilac')) + '</div>' +
+            '<button class="btn xs ghost" data-edit="' + f.id + '">编辑</button>' +
+            '</div>';
+        }).join('') +
+          '<button class="btn sm soft full" style="margin-top:10px" id="fundAdd">＋ 新增类目</button>';
+        api.body.innerHTML = html;
+        api.body.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => this.editFund(b.dataset.edit, api, App)));
+        const addBtn = api.body.querySelector('#fundAdd');
+        if (addBtn) addBtn.addEventListener('click', () => this.editFund(null, api, App));
+      };
+      const api = K.Sheet.open({
+        title: '专项基金类目管理',
+        body: '<div class="hint">加载中…</div>',
+        onMount: renderList
+      });
+    },
+    editFund(fid, parentApi, App) {
+      const V = K.Store.data.savings;
+      const isNew = !fid;
+      const base = isNew ? null : D.FUNDS.find(f => f.id === fid);
+      const custom = isNew ? null : (V.customFunds || []).find(f => f.id === fid);
+      const item = isNew ? null : (base || custom);
+      const all = D.allFunds();
+      const used = isNew ? null : all.find(f => f.id === fid);
+      K.Sheet.form({
+        title: isNew ? '新增基金类目' : '编辑基金类目',
+        fields: [
+          { k: 'name', label: '类目名称', required: true, value: used ? used.name : '', placeholder: '如：演唱会基金' }
+        ],
+        onSubmit: v => {
+          const name = (v.name || '').trim();
+          if (!name) { K.Toast('类目名称不能为空'); return false; }
+          const same = all.some(f => f.name === name && f.id !== fid);
+          if (same) { K.Toast('已存在相同名称的类目'); return false; }
+          if (isNew) {
+            const colors = ['#7FC0F5', '#FF9CC9', '#B197F0', '#6FCFB0', '#F0BE63', '#F08C9C', '#8FE3C4', '#C6B6EE'];
+            const idx = (V.customFunds || []).length % colors.length;
+            V.customFunds = V.customFunds || [];
+            V.customFunds.push({ id: 'fund_' + K.uid(), name: name, icon: 'i-sparkle', c: colors[idx] });
+            K.Toast('已新增类目：' + name);
+          } else if (base) {
+            // 基础类目：保存到 customOverrides 中，下次 allFunds 优先读取
+            V.baseFundOverrides = V.baseFundOverrides || {};
+            V.baseFundOverrides[fid] = name;
+            K.Toast('基础类目已更新：' + name);
+          } else if (custom) {
+            custom.name = name;
+            K.Toast('自定义类目已更新：' + name);
+          }
+          K.Store.save();
+          // 关闭编辑表单和管理弹窗，刷新页面
+          parentApi && parentApi.close();
+          App.render();
+        }
+      });
+    },
     rec(App, kind) {
       const V = K.Store.data.savings;
       const title = kind === 'save' ? '存入记录' : kind === 'in' ? '当日收入' : '当日支出';
@@ -148,7 +214,7 @@
           if (fd) fd.style.display = v === '冲动消费' ? '' : 'none';
         }
       });
-      if (kind === 'save') fields.push({ k: 'fund', label: '归入基金', type: 'opts', value: 'common', options: D.FUNDS.map(f => ({ v: f.id, t: f.name })) });
+      if (kind === 'save') fields.push({ k: 'fund', label: '归入基金', type: 'opts', value: 'common', options: D.allFunds().map(f => ({ v: f.id, t: f.name })) });
       fields.push({ k: 'note', label: '备注', placeholder: kind === 'out' ? '买了什么…' : '来源 / 说明' });
       if (kind === 'out') fields.push({
         k: 'reason', label: '冲动消费理由（必填）', type: 'textarea',
