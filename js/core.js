@@ -55,6 +55,15 @@
     const a = hm2min(bed), b = hm2min(wake); if (a == null || b == null) return 0;
     return b >= a ? b - a : b + 1440 - a;
   }
+  function isFullDateTime(s) { return /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$/.test(String(s || '')); }
+  function fmtDateTime(s) { // YYYY-MM-DD HH:mm -> XXXX年XX月XX日 HH:mm
+    const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/);
+    return m ? (m[1] + '年' + m[2] + '月' + m[3] + '日 ' + m[4] + ':' + m[5]) : s;
+  }
+  function parseDateTime(s) { // YYYY-MM-DD HH:mm -> {date,time}
+    const m = String(s || '').match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})$/);
+    return m ? { date: m[1], time: m[2] } : { date: '', time: '' };
+  }
 
   /* ---------- 工具 ---------- */
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -219,6 +228,49 @@
           $('[data-act="ok"]', a.el).addEventListener('click', () => { a.close(); onOk && onOk(); });
         }
       });
+    },
+    /* 日期时间组合选择面板：先选日期，再选时分；返回 YYYY-MM-DD HH:mm */
+    pickDateTime(opts) {
+      opts = opts || {};
+      const now = nowBJ();
+      const today = dstr(now), nowTime = tstr(now);
+      let curDate = today, curTime = nowTime;
+      const init = String(opts.value || '');
+      const m = init.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})$/);
+      if (m) { curDate = m[1]; curTime = m[2]; }
+      else if (/^\d{2}:\d{2}$/.test(init)) { curTime = init; }
+      const body = '<div class="dt-picker">' +
+        '<div class="dt-row">' +
+          '<label>日期</label>' +
+          '<input class="inp" type="date" id="dtDate" value="' + curDate + '">' +
+        '</div>' +
+        '<div class="dt-row">' +
+          '<label>时间</label>' +
+          '<input class="inp" type="time" id="dtTime" value="' + curTime + '">' +
+        '</div>' +
+        '<div class="dt-preview" id="dtPreview">' + esc(fmtDateTime(curDate + ' ' + curTime)) + '</div>' +
+      '</div>';
+      return Sheet.open({
+        title: opts.title || '选择日期时间',
+        body: body,
+        footer: '<button class="btn ghost" data-act="cancel">取消</button><button class="btn primary" data-act="ok">确定</button>',
+        onMount(a) {
+          const dateIn = $('#dtDate', a.el), timeIn = $('#dtTime', a.el), preview = $('#dtPreview', a.el);
+          const update = () => {
+            if (preview) preview.textContent = fmtDateTime(dateIn.value + ' ' + timeIn.value) || '请选择完整日期和时间';
+          };
+          if (dateIn) { dateIn.addEventListener('input', update); dateIn.addEventListener('change', update); }
+          if (timeIn) { timeIn.addEventListener('input', update); timeIn.addEventListener('change', update); }
+          update();
+          $('[data-act="cancel"]', a.el).addEventListener('click', a.close);
+          $('[data-act="ok"]', a.el).addEventListener('click', () => {
+            if (!dateIn.value || !timeIn.value) { Toast('请选择完整的日期和时间'); return; }
+            const v = dateIn.value + ' ' + timeIn.value;
+            a.close();
+            if (opts.onPick) opts.onPick(v);
+          });
+        }
+      });
     }
   };
 
@@ -235,6 +287,9 @@
       case 'number': ctl = '<input class="inp" id="' + id + '" type="number" inputmode="decimal" step="' + (f.step || 'any') + '" placeholder="' + esc(f.placeholder || '') + '" value="' + esc(v) + '">'; break;
       case 'date': ctl = '<input class="inp" id="' + id + '" type="date" value="' + esc(v) + '">'; break;
       case 'time': ctl = '<input class="inp" id="' + id + '" type="time" value="' + esc(v) + '">'; break;
+      case 'datetime':
+        ctl = '<input class="inp datetime-inp" id="' + id + '" type="text" readonly placeholder="' + esc(f.placeholder || '选择年月日 时:分') + '" value="' + esc(fmtDateTime(v)) + '" data-raw="' + esc(v) + '">';
+        break;
       case 'select':
         ctl = '<select class="inp" id="' + id + '">' + (f.options || []).map(o =>
           '<option value="' + esc(o.v) + '"' + (String(o.v) === String(v) ? ' selected' : '') + '>' + esc(o.t) + '</option>').join('') + '</select>';
@@ -270,6 +325,14 @@
         e.addEventListener('input', () => { out.textContent = e.value + (f.unit || ''); if (f.onChange) f.onChange(e.value, root); });
       } else if (f.type === 'switch') {
         e.addEventListener('click', () => { e.classList.toggle('on'); if (f.onChange) f.onChange(e.classList.contains('on'), root); });
+      } else if (f.type === 'datetime') {
+        e.addEventListener('click', () => {
+          Sheet.pickDateTime({
+            title: f.label || '选择日期时间',
+            value: e.dataset.raw || e.value,
+            onPick: v => { e.value = fmtDateTime(v); e.dataset.raw = v; if (f.onChange) f.onChange(v, root); }
+          });
+        });
       } else if (f.type === 'icons') {
         e.addEventListener('click', ev => {
           const b = ev.target.closest('.ic-cell'); if (!b) return;
@@ -291,6 +354,7 @@
       if (f.type === 'opts') v = e.dataset.val;
       else if (f.type === 'switch') v = e.classList.contains('on');
       else if (f.type === 'icons') v = e.dataset.val;
+      else if (f.type === 'datetime') v = e.dataset.raw || '';
       else v = e.value;
       if (f.type === 'number') v = v === '' ? '' : num(v);
       if (typeof v === 'string') v = v.trim();
@@ -451,6 +515,7 @@
   w.Core = {
     $, $$, esc, ico, pad, nowBJ, dstr, mstr, tstr, addDays, addMonth, dayDiff, weekdayCN, weekdayOf,
     daysInMonth, monthDays, weekRange, lastNDays, mdShort, hm2min, min2hm, sleepMinutes,
+    isFullDateTime, fmtDateTime, parseDateTime,
     uid, clamp, num, pct, money, pick, deepMerge, Store, Toast, Sheet, Chart, makeSortable, fetchJSON, DB_KEY,
     injectIcons, iconCellsHTML, svgInner
   };
