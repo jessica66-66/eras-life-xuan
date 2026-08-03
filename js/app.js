@@ -138,7 +138,7 @@
       return '<div class="fld"><div class="fld-l">跨设备同步（GitHub 同源）</div>' +
         '<div class="sw-row"><div class="fld-l" style="margin:0">开启多端同步</div><div class="sw' + (c.enabled ? ' on' : '') + '" id="stSyncOn"><i></i></div></div>' +
         '<div class="fld" style="margin-top:10px"><div class="fld-l">GitHub Token（PAT · 仅本仓库权限）</div><input class="inp" id="stToken" type="password" placeholder="ghp_xxx" value="' + esc(c.token || '') + '"></div>' +
-        '<div class="fld-h">数据存于公开仓库的 data/full.json，手机/电脑打开同一链接即自动同步。建议去 GitHub 创建一个<b>仅限本仓库、仅 Contents 读写</b>的 Fine-grained PAT 粘贴到此，替换内置默认 Token 以降低风险。</div>' +
+        '<div class="fld-h">数据存于公开仓库的 data/full.json，手机/电脑打开同一链接即自动同步。把你的 GitHub PAT（ghp_ 开头）粘贴到上方输入框，打开开关即可。建议创建<b>仅限本仓库、仅 Contents 读写</b>的 Fine-grained PAT，避免授权过宽。</div>' +
         '<div class="btn-row"><button class="btn sm soft" id="stTest">测试连接</button><button class="btn sm primary" id="stNow">立即同步</button></div>' +
         '<div class="btn-row"><button class="btn sm ghost" id="stPush">强制上传</button><button class="btn sm ghost" id="stPull">强制下载</button></div>' +
         '<div class="fld-h" id="stSyncStatus">状态：' + st + '</div></div>';
