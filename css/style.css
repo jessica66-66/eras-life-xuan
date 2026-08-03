@@ -306,6 +306,22 @@ select.inp{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.
 .sw.on i{left:25px;}
 .sw-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 
+/* 日期时间选择器 */
+.inp.datetime-inp{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24'><rect x='3' y='4' width='18' height='18' rx='3' fill='none' stroke='%23A497B0' stroke-width='1.8'/><path d='M16 2v4M8 2v4M3 10h18' fill='none' stroke='%23A497B0' stroke-width='1.8' stroke-linecap='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;cursor:pointer;-webkit-user-select:none;user-select:none;}
+.inp.datetime-inp:placeholder-shown{color:var(--ink-3);}
+.dt-picker{padding:6px 2px 2px;}
+.dt-row{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+.dt-row label{flex:none;font-size:13px;font-weight:700;color:var(--ink-2);width:42px;}
+.dt-row .inp{flex:1;min-height:48px;border-radius:14px;background:rgba(255,255,255,.9);}
+.dt-row input[type="date"],.dt-row input[type="time"]{font-family:inherit;font-size:15px;color:var(--ink-1);}
+.dt-preview{text-align:center;font-size:15px;font-weight:700;color:#8B5A9F;padding:10px 0 4px;border-top:1px dashed var(--line);}
+@media (max-width:380px){
+  .dt-row{gap:8px;}
+  .dt-row label{width:36px;font-size:12px;}
+  .dt-row .inp{min-height:44px;}
+}
+
 /* 图标选择器网格 */
 .ic-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:2px;}
 .ic-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:9px 4px;border-radius:14px;background:rgba(255,255,255,.8);border:1.5px solid var(--line-2);color:var(--ink-2);min-height:62px;cursor:pointer;transition:.18s;-webkit-tap-highlight-color:transparent;}
