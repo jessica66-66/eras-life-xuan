@@ -681,10 +681,35 @@ select.inp{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.
 .pet-cheer-p i{position:absolute;bottom:14%;font-style:normal;font-size:18px;opacity:0;
   animation:petFly 2.1s ease-out infinite;}
 
+/* ===== 阅读模块 ===== */
+.reading-week{display:flex;gap:6px;margin-top:12px;}
+.reading-day{flex:1;text-align:center;padding:10px 2px 8px;border-radius:var(--r-m);
+  background:rgba(255,255,255,.6);border:1px solid var(--line);transition:transform .18s ease;}
+.reading-day:active{transform:scale(.96);}
+.reading-day.done{background:linear-gradient(180deg,rgba(168,230,207,.35),rgba(255,255,255,.6));border-color:rgba(129,199,132,.45);}
+.reading-day.future{opacity:.5;}
+.rd-d{font-size:11px;font-weight:700;color:var(--ink-3);}
+.rd-ring{width:34px;height:34px;margin:7px auto 0;border-radius:50%;position:relative;
+  background:conic-gradient(var(--pink-300) var(--p,0%),var(--line-2) var(--p,0%));
+  display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:var(--ink);}
+.rd-ring::before{content:'';position:absolute;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.92);}
+.rd-ring>span{position:relative;z-index:1;}
+.reading-day.done .rd-ring{background:conic-gradient(var(--mint-300) var(--p,0%),var(--line-2) var(--p,0%));}
+.rd-bar{height:34px;width:6px;margin:5px auto 0;border-radius:999px;background:var(--line-2);overflow:hidden;}
+.rd-bar>div{background:linear-gradient(180deg,var(--pink-300),var(--lilac-300));border-radius:999px;width:100%;}
+.reading-day.done .rd-bar>div{background:linear-gradient(180deg,var(--mint-300),var(--lilac-300));}
+.book-cv-img{width:46px;height:64px;border-radius:6px;object-fit:cover;display:block;box-shadow:var(--shadow);background:var(--line-2);}
+.book-li .book{display:flex;gap:12px;align-items:center;}
+.reading-sync-note{padding:10px 12px;border-radius:var(--r-m);background:rgba(255,255,255,.65);font-size:12px;color:var(--ink-2);line-height:1.55;margin-bottom:10px;}
+
 @media (max-width:400px){
   .pet-photo{width:162px;height:162px;}
   .pet-stage{min-height:242px;}
   .pet-grid,.pet-items{grid-template-columns:repeat(2,1fr);}
+  .reading-week{gap:4px;}
+  .reading-day{padding:8px 1px 6px;}
+  .rd-ring{width:30px;height:30px;}
+  .rd-ring::before{width:22px;height:22px;}
 }
 
 /* 小屏优化 */
