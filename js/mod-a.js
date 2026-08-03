@@ -823,7 +823,6 @@
             '<button class="btn primary" id="rLog">记录今日阅读</button>' +
             '<button class="btn soft" id="rPull">云端同步</button>' +
             '<button class="btn soft" id="rSync">微信读书同步</button>' +
-            '<button class="btn soft" id="rAdd">添加书籍</button>' +
             '</div>' +
             '<div class="hint" style="margin-top:8px">自动同步已开启（GitHub）：每日 23:30 从微信读书写入同源 data.json' + (syncStatus !== 'none' ? ' · ' + esc(syncMsg || syncStatus) : '') + '</div>'
         });
@@ -873,7 +872,7 @@
               '<div style="margin-top:6px">' + UI.bar(p, p >= 100 ? 'ok' : '') + '</div></div>' +
               '<div class="li-act"><button class="mini-btn del" data-db="' + b.id + '">' + ico('i-close') + '</button></div>' +
               '</div></div>';
-          }).join('') : UI.empty('书架还空着，先添加一本想读的中文书吧', 'i-book')
+          }).join('') : UI.empty('书架还空着，点击「云端同步」或等每日 23:30 自动同步微信读书', 'i-book')
         });
       } else if (this.tab === 'finished') {
         h += UI.card({
@@ -912,7 +911,6 @@
     mount(root, App) {
       const S = K.Store.data;
       $$('#rTab [data-t]', root).forEach(b => b.addEventListener('click', () => { this.tab = b.dataset.t; App.render(); }));
-      const ad = $('#rAdd', root); if (ad) ad.addEventListener('click', () => this.addBook(App));
       const lg = $('#rLog', root); if (lg) lg.addEventListener('click', () => this.log(App));
       const sy = $('#rSync', root); if (sy) sy.addEventListener('click', () => this.syncWeread(App));
       const pl = $('#rPull', root); if (pl) pl.addEventListener('click', () => this.fetchCloud(App));
@@ -928,26 +926,9 @@
         App.openReader(b.dataset.book);
       }));
     },
-    addBook(App, pre) {
-      const S = K.Store.data;
-      K.Sheet.form({
-        title: '添加书籍',
-        fields: [
-          { k: 'title', label: '书名', required: true, value: pre ? pre.title : '', validate: v => D.hasCN(v) ? '' : '本工作台仅收录中文书籍，请填写中文书名' },
-          { k: 'author', label: '作者', value: pre ? pre.author : '' },
-          { k: 'pages', label: '书籍总页数', type: 'number', required: true, placeholder: '如 320' },
-          { k: 'cover', label: '封面 URL（可选）', placeholder: '粘贴微信读书封面链接' },
-          { k: 'content', label: '书籍全文（可选，粘贴后开启分页阅读与摘抄）', type: 'textarea', placeholder: '在此粘贴书籍全文，系统会自动分页；留空也可稍后在阅读器内补录' }
-        ],
-        onSubmit: v => {
-          S.reading.books.push({ id: K.uid(), title: v.title, author: v.author, pages: K.num(v.pages), cover: (v.cover || '').trim(), content: (v.content || '').trim(), progress: 0, at: K.dstr() });
-          K.Store.save(); K.Toast('已加入书单 ✦'); App.render();
-        }
-      });
-    },
     log(App) {
       const S = K.Store.data, today = K.dstr();
-      if (!S.reading.books.length) { K.Toast('请先添加一本书'); this.addBook(App); return; }
+      if (!S.reading.books.length) { K.Toast('书架为空，请先通过微信读书同步或云端同步获取书籍'); return; }
       K.Sheet.form({
         title: '今日阅读记录 · ' + today,
         fields: [
