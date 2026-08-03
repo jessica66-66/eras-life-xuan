@@ -821,13 +821,11 @@
             '</div></div>' +
             '<div class="btn-row">' +
             '<button class="btn primary" id="rLog">记录今日阅读</button>' +
-            (R.cloud && R.cloud.bin ? '<button class="btn soft" id="rPull">云端同步</button>' : '') +
+            '<button class="btn soft" id="rPull">云端同步</button>' +
             '<button class="btn soft" id="rSync">微信读书同步</button>' +
             '<button class="btn soft" id="rAdd">添加书籍</button>' +
             '</div>' +
-            (R.cloud && R.cloud.bin
-              ? '<div class="hint" style="margin-top:8px">自动同步已开启（JSONBin）：' + esc(R.cloud.bin) + (syncStatus !== 'none' ? ' · ' + esc(syncMsg || syncStatus) : '') + '</div>'
-              : '<div class="hint" style="margin-top:8px">未配置云端自动同步：点「微信读书同步」填写 JSONBin 后，即可每日自动拉取微信读书数据</div>')
+            '<div class="hint" style="margin-top:8px">自动同步已开启（GitHub）：每日 23:30 从微信读书写入同源 data.json' + (syncStatus !== 'none' ? ' · ' + esc(syncMsg || syncStatus) : '') + '</div>'
         });
         h += UI.card({
           icon: 'i-chart', title: '近 7 日阅读趋势',
@@ -971,12 +969,16 @@
       });
     },
     fetchCloud(App, silent) {
+      const R = K.Store.data.reading;
       const url = 'data.json';
       if (!silent) K.Toast('正在从云端拉取微信读书数据…', 1500);
       fetch(url, { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))).then(rec => {
+        const beforeMin = D.readingToday();
+        const beforeBooks = R.books.length;
         const added = D.readingSyncFromWeread(rec || {});
+        const changed = added > 0 || R.books.length !== beforeBooks || D.readingToday() !== beforeMin;
         if (!silent) K.Toast('云端同步完成，新增 ' + added + ' 分钟', 2500);
-        if (App && App.render) App.render();
+        if (App && App.render && (!silent || changed)) App.render();
       }).catch(e => {
         if (!silent) K.Toast('云端拉取失败：' + e.message + '（确认已开启每日自动同步）', 3500);
       });
@@ -994,6 +996,8 @@
         submitText: '保存设置',
         onSubmit: v => {
           R.dailyMin = Math.max(1, K.num(v.dailyMin) || 60);
+          R.cloud.bin = '';   // 旧 JSONBin 模式已废弃，清除残留 bin 避免状态行误判
+          R.cloud.readKey = '';
           K.Store.save();
           if (v.json && v.json.trim()) {
             try { const data = JSON.parse(v.json); const added = D.readingSyncFromWeread(data); K.Toast('导入成功，新增 ' + added + ' 分钟'); App.render(); }
