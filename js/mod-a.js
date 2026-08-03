@@ -477,6 +477,37 @@
   /* =======================================================
      模块 2 · 待办
      ======================================================= */
+  const TODO_DATETIME_CATS = ['morning', 'study', 'trip', 'work']; // 这四类使用完整日期时间选择器
+  const todoNeedDateTime = cat => TODO_DATETIME_CATS.indexOf(cat) >= 0;
+  function todoNormalizeDue(due, ds) {
+    if (!due) return '';
+    if (K.isFullDateTime(due)) return due;
+    if (/^\d{2}:\d{2}$/.test(due)) return ds + ' ' + due; // 旧数据兼容：把时间补上当天的日期
+    return '';
+  }
+  function todoDisplayDue(due, cat) {
+    if (!due) return '';
+    if (todoNeedDateTime(cat) && K.isFullDateTime(due)) return K.fmtDateTime(due);
+    return due;
+  }
+  function todoIsOverdue(i, ds, today) {
+    if (!i.due || i.done) return false;
+    if (todoNeedDateTime(i.cat)) {
+      if (!K.isFullDateTime(i.due)) return false;
+      const p = K.parseDateTime(i.due);
+      if (!p.date) return false;
+      if (p.date < today) return true;
+      if (p.date === today && K.hm2min(p.time) < K.hm2min(K.tstr())) return true;
+      return false;
+    }
+    const nowM = K.hm2min(K.tstr());
+    return ds < today || (ds === today && K.hm2min(i.due) < nowM);
+  }
+  function todoTimePart(i) {
+    if (todoNeedDateTime(i.cat) && K.isFullDateTime(i.due)) return K.parseDateTime(i.due).time;
+    return i.due;
+  }
+
   Pages.todo = {
     date: null,
     render() {
@@ -527,13 +558,12 @@
     },
     item(i, ds, today) {
       const p = D.PRI[i.pri] || D.PRI.mid;
-      const nowM = K.hm2min(K.tstr());
-      const od = !i.done && i.due && (ds < today || (ds === today && K.hm2min(i.due) < nowM));
+      const od = todoIsOverdue(i, ds, today);
       return '<div class="li' + (i.done ? ' done' : '') + (od ? ' overdue' : '') + '" data-id="' + i.id + '">' +
         '<button class="cbox" data-t="' + i.id + '" aria-label="完成">' + ico('i-check') + '</button>' +
         '<div class="li-main" data-e="' + i.id + '"><div class="li-t">' + esc(i.title) + '</div>' +
         '<div class="li-s">' + UI.tag(p.t + '优先级', p.c) +
-        (i.due ? UI.tag((i.remind ? '⏰ ' : '') + i.due, od ? 'bad' : 'sky') : '') +
+        (i.due ? UI.tag((i.remind ? '⏰ ' : '') + todoDisplayDue(i.due, i.cat), od ? 'bad' : 'sky') : '') +
         (i.carried ? UI.tag('顺延 ×' + i.carryN, 'warn') : '') +
         (i.penalty ? UI.tag('熬夜惩罚', 'bad') : '') +
         (i.note ? '<span style="color:var(--ink-3)">' + esc(i.note.slice(0, 18)) + '</span>' : '') +
@@ -569,17 +599,23 @@
     edit(it, App, catId) {
       const S = K.Store.data, ds = this.date, isNew = !it;
       const cat = catId || (it && it.cat) || 'work';
+      const needDT = todoNeedDateTime(cat);
+      const dueValue = it ? todoNormalizeDue(it.due, ds) : (needDT ? (ds + ' ' + K.tstr()) : '');
+      const dueField = needDT
+        ? { k: 'due', label: '截止 / 提醒时间', type: 'datetime', value: dueValue, required: true, placeholder: '选择年月日 时:分' }
+        : { k: 'due', label: '截止 / 提醒时间（睡前收尾建议填写）', type: 'time', value: it ? it.due : '' };
       K.Sheet.form({
         title: isNew ? '新增任务' : '编辑任务',
         fields: [
           { k: 'title', label: '任务内容', required: true, value: it ? it.title : '', placeholder: '要做的事…' },
           { k: 'cat', label: '所属分类', type: 'select', value: cat, options: D.TODO_CATS.map(c => ({ v: c.id, t: c.name })) },
           { k: 'pri', label: '优先级', type: 'opts', value: it ? it.pri : 'mid', options: [{ v: 'high', t: '高' }, { v: 'mid', t: '中' }, { v: 'low', t: '低' }] },
-          { k: 'due', label: '截止 / 提醒时间（出行事务建议填写）', type: 'time', value: it ? it.due : '' },
+          dueField,
           { k: 'remind', label: '开启事务提醒', type: 'switch', value: it ? !!it.remind : false, hint: '开启后，打开工作台时会自动播报临近事务；已授权通知则同时弹出系统提醒。' },
           { k: 'note', label: '备注', type: 'textarea', value: it ? it.note : '', placeholder: '地点、同行人、注意事项…' }
         ],
         onSubmit: v => {
+          if (needDT && !K.isFullDateTime(v.due)) { K.Toast('请选择完整的年月日和时间'); return false; }
           if (isNew) {
             S.todo.days[ds].items.push({ id: K.uid(), cat: v.cat, title: v.title, pri: v.pri, due: v.due, remind: v.remind, note: v.note, done: false, tpl: false });
           } else {
@@ -599,11 +635,21 @@
     checkRemind() {
       const S = K.Store.data, today = K.dstr(), d = S.todo.days[today]; if (!d) return;
       const now = K.hm2min(K.tstr());
-      const soon = d.items.filter(i => !i.done && i.remind && i.due && K.hm2min(i.due) - now <= 60 && K.hm2min(i.due) - now >= -5);
+      const soon = d.items.filter(i => {
+        if (i.done || !i.remind || !i.due) return false;
+        const t = todoTimePart(i);
+        if (!t) return false;
+        if (todoNeedDateTime(i.cat) && K.isFullDateTime(i.due)) {
+          const p = K.parseDateTime(i.due);
+          if (p.date !== today) return false;
+        }
+        const diff = K.hm2min(t) - now;
+        return diff <= 60 && diff >= -5;
+      });
       if (soon.length) {
-        K.Toast('⏰ 即将到时：' + soon.map(i => i.title + ' ' + i.due).join('；'), 4000);
+        K.Toast('⏰ 即将到时：' + soon.map(i => i.title + ' ' + todoDisplayDue(i.due, i.cat)).join('；'), 4000);
         if (S.settings.notify && 'Notification' in window && Notification.permission === 'granted') {
-          try { new Notification('Eras Life・璇 提醒', { body: soon.map(i => i.due + ' ' + i.title).join('\n') }); } catch (e) { }
+          try { new Notification('Eras Life・璇 提醒', { body: soon.map(i => todoDisplayDue(i.due, i.cat) + ' ' + i.title).join('\n') }); } catch (e) { }
         }
       }
     }
