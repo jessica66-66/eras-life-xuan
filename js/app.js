@@ -133,8 +133,15 @@
     },
 
     syncSectionHTML(S) {
-      return '<div class="fld"><div class="fld-l">云端同步</div>' +
-        '<div class="hint">已改用 GitHub 同源方案：阅读数据由每天 23:30 的自动任务写入仓库 data.json，无需 JSONBin 或额外密钥。本机数据仍可通过下方「导出备份 / 导入恢复」手动迁移。</div></div>';
+      const c = S.settings.sync;
+      const st = c.status === 'ok' ? ('已同步' + (c.lastSync ? ' · ' + c.lastSync : '')) : (c.status === 'error' ? '同步出错' : (c.status === 'offline' ? '离线待同步' : (c.enabled ? '同步中…' : '未开启')));
+      return '<div class="fld"><div class="fld-l">跨设备同步（GitHub 同源）</div>' +
+        '<div class="sw-row"><div class="fld-l" style="margin:0">开启多端同步</div><div class="sw' + (c.enabled ? ' on' : '') + '" id="stSyncOn"><i></i></div></div>' +
+        '<div class="fld" style="margin-top:10px"><div class="fld-l">GitHub Token（PAT · 仅本仓库权限）</div><input class="inp" id="stToken" type="password" placeholder="ghp_xxx" value="' + esc(c.token || '') + '"></div>' +
+        '<div class="fld-h">数据存于公开仓库的 data/full.json，手机/电脑打开同一链接即自动同步。建议去 GitHub 创建一个<b>仅限本仓库、仅 Contents 读写</b>的 Fine-grained PAT 粘贴到此，替换内置默认 Token 以降低风险。</div>' +
+        '<div class="btn-row"><button class="btn sm soft" id="stTest">测试连接</button><button class="btn sm primary" id="stNow">立即同步</button></div>' +
+        '<div class="btn-row"><button class="btn sm ghost" id="stPush">强制上传</button><button class="btn sm ghost" id="stPull">强制下载</button></div>' +
+        '<div class="fld-h" id="stSyncStatus">状态：' + st + '</div></div>';
     },
 
     /* ---------- 设置 ---------- */
@@ -193,6 +200,29 @@
             inp.click();
           });
           $('#stIcons', a.el).addEventListener('click', () => { a.close(); App.iconManager(); });
+
+          // 跨设备同步（GitHub 同源）
+          const Sync = w.Sync;
+          const c = S.settings.sync;
+          const setStatus = (t) => { const el = $('#stSyncStatus', a.el); if (el) el.textContent = '状态：' + t; };
+          const readCfg = () => {
+            c.enabled = $('#stSyncOn', a.el).classList.contains('on');
+            c.token = $('#stToken', a.el).value.trim();
+            K.Store.save();
+          };
+          $('#stSyncOn', a.el).addEventListener('click', function () {
+            this.classList.toggle('on'); readCfg();
+          });
+          Sync.setStatus(c.status);
+          $('#stTest', a.el).addEventListener('click', async () => {
+            readCfg();
+            if (!c.token) { K.Toast('请先填写 GitHub Token'); return; }
+            try { const r = await Sync.test(); setStatus(r.ok ? '连接正常' : ('连接失败 ' + r.status)); K.Toast(r.ok ? '连接正常 ✦' : '连接失败'); }
+            catch (e) { setStatus('连接失败：' + (e.message || e)); K.Toast('连接失败：' + (e.message || e)); }
+          });
+          $('#stNow', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } if (Sync.syncing) { K.Toast('同步已在进行中，请稍候'); return; } Sync.once(); });
+          $('#stPush', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } if (Sync.syncing) { K.Toast('同步已在进行中，请稍候'); return; } Sync.forcePush(); });
+          $('#stPull', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } if (Sync.syncing) { K.Toast('同步已在进行中，请稍候'); return; } Sync.forcePull(); });
 
           $('#stReset', a.el).addEventListener('click', () => {
             K.Sheet.confirm('清空全部数据', '此操作不可恢复，将删除所有打卡、记账、阅读与复盘记录。建议先导出备份。', () => {
@@ -323,7 +353,8 @@
       try {
       K.Store.load(D.defaults());
       K.injectIcons();
-      // 旧 JSONBin/自定义云端同步已废弃，不再初始化；阅读数据走 GitHub 同源 data.json
+      // 跨设备同步（GitHub 同源）：每个设备开启后自动拉取合并，保存时自动上传
+      if (w.Sync) w.Sync.init();
       D.runDailyJobs();
 
       // 星光闪片
