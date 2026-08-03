@@ -1,11 +1,14 @@
-/* Eras Life・璇 · 云端同步模块
- * 后端无关：默认 JSONBin（免服务器），也支持自定义 REST 地址 / 自建服务器。
- * 数据以整个 Store 对象为单位在「本地 localStorage」与「云端」之间同步。
+/* Eras Life・璇 · 跨设备同步模块（GitHub 同源后端）
+ * 整个 Store 对象在「本地 localStorage」与「GitHub 仓库 data/full.json」之间同步。
+ * 读取：同源静态文件（无需 token、无需 CORS 预检），手机/电脑/换网络均一致。
+ * 写入：GitHub Contents API（需 PAT，前端持有），每次保存自动安排上传。
  * 冲突策略：数组按 id/date 合并（日志不丢失），标量取较新一方；并提供强制上传/下载兜底。
  */
 (function (w) {
   const K = w.Core;
   const App = () => w.App;
+  const REPO = 'jessica66-66/eras-life-xuan';
+  const FILE = 'data/full.json';
 
   const Sync = {
     syncing: false,
@@ -13,7 +16,6 @@
 
     config() { return K.Store.data.settings.sync; },
 
-    /* ---------- 配置 ---------- */
     set(o) {
       const c = this.config();
       Object.assign(c, o);
@@ -21,33 +23,42 @@
     },
 
     /* ---------- 端点请求 ---------- */
-    async req(method, body) {
+    ghUrl() { return 'https://api.github.com/repos/' + REPO + '/contents/' + FILE; },
+    async ghApi(method, body) {
       const c = this.config();
-      let url, headers = { 'Content-Type': 'application/json' };
-      if (c.mode === 'jsonbin') {
-        if (!c.bin || !c.key) throw new Error('请先在设置中填写 Bin ID 与 API Key');
-        url = 'https://api.jsonbin.io/v3/b/' + c.bin;
-        headers['X-Master-Key'] = c.key;
-      } else {
-        if (!c.url) throw new Error('请填写自定义同步地址');
-        url = c.url;
-        if (c.headers) {
-          try { Object.assign(headers, JSON.parse(c.headers)); }
-          catch (e) { throw new Error('请求头 JSON 格式错误'); }
-        }
-      }
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 10000);
-      try {
-        const res = await fetch(url, { method, headers, mode: 'cors', cache: 'no-store', body: body ? JSON.stringify(body) : undefined, signal: ctrl.signal });
-        if (!res.ok) { const e = new Error('http ' + res.status); e.status = res.status; throw e; }
-        return await res.json().catch(() => ({}));
-      } finally { clearTimeout(t); }
+      if (!c.token) throw new Error('请先在设置中填写 GitHub Token');
+      const headers = {
+        'Authorization': 'token ' + c.token,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'eras-life-xuan'
+      };
+      const res = await fetch(this.ghUrl(), { method, headers, cache: 'no-store', body: body ? JSON.stringify(body) : undefined });
+      return res;
     },
-
-    unwrap(j) {
-      if (j && typeof j === 'object' && j.record !== undefined) return j.record;
-      return j;
+    /* 读取：同源静态文件（无需 token）；写入：GitHub API（需 token） */
+    async req(method, body) {
+      if (method === 'GET') {
+        const url = (location.origin + location.pathname.replace(/index\.html$/, '')) + FILE + '?t=' + Date.now();
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) { if (res.status === 404) return null; throw new Error('http ' + res.status); }
+        return await res.json().catch(() => null);
+      }
+      // PUT：先取当前 sha（更新需要），再写入（剔除 token 避免泄露）
+      let sha = null;
+      try { const g = await this.ghApi('GET'); if (g.ok) { const j = await g.json(); sha = j.sha; } } catch (e) {}
+      const data = JSON.parse(JSON.stringify(K.Store.data));
+      if (data.settings && data.settings.sync) delete data.settings.sync.token;
+      const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+      const payload = { message: 'sync: update full data @ ' + K.tstr(), content, branch: (this.config().branch || 'main') };
+      if (sha) payload.sha = sha;
+      const res = await this.ghApi('PUT', payload);
+      if (!res.ok) {
+        let msg = 'http ' + res.status;
+        try { const j = await res.json(); if (j.message) msg = j.message; } catch (e) {}
+        throw new Error(msg);
+      }
+      return await res.json();
     },
 
     /* ---------- 合并（数组按键、标量取较新） ---------- */
@@ -89,13 +100,6 @@
       c.status = state;            // syncing | ok | offline | error | idle
       if (state === 'ok') c.lastSync = K.tstr();
       if (msg) c._msg = msg;
-      const btn = document.getElementById('btnSync');
-      if (btn) {
-        btn.className = 'icon-btn' + (state === 'syncing' ? ' spin' : (state === 'error' ? ' bad' : (state === 'offline' ? ' dim' : '')));
-        btn.title = '云端同步' + (msg ? ' · ' + msg : '');
-        const ic = btn.querySelector('.ic use');
-        if (ic) ic.setAttribute('href', state === 'error' ? '#i-warn' : (state === 'offline' ? '#i-offline' : '#i-cloud'));
-      }
       const txt = state === 'ok' ? ('已同步' + (msg ? ' · ' + msg : '')) :
         (state === 'error' ? ('同步出错' + (msg ? ' · ' + msg : '')) :
         (state === 'offline' ? ('离线待同步' + (msg ? ' · ' + msg : '')) :
@@ -117,11 +121,11 @@
       try {
         let remote = null, rRev = 0;
         try {
-          const rd = this.unwrap(await this.req('GET'));
+          const rd = await this.req('GET');
           remote = rd;
           if (remote && remote.settings && remote.settings.sync) rRev = remote.settings.sync.rev || 0;
         } catch (e) {
-          if (e.status === 404) remote = null;
+          if (e.message && e.message.indexOf('404') >= 0) remote = null;
           else throw e;
         }
         const local = K.Store.data;
@@ -129,20 +133,17 @@
         const lBase = local.settings.sync.baseRev || 0;
 
         if (!remote || !remote.meta) {
-          // 云端为空 → 上传本地
           local.settings.sync.baseRev = local.settings.sync.rev || 1;
           internalSave();
           await this.req('PUT', K.Store.data);
           this.setStatus('ok', '已上传到云端');
         } else if (force === 'push') {
-          // 强制以本地覆盖云端
           local.settings.sync.rev = Math.max(lRev, rRev) + 1;
           local.settings.sync.baseRev = local.settings.sync.rev;
           internalSave();
           await this.req('PUT', K.Store.data);
           this.setStatus('ok', '已强制上传');
         } else if (force === 'pull') {
-          // 强制以云端覆盖本地
           const merged = this.mergeObj(local, remote);
           merged.settings.sync.rev = rRev + 1;
           merged.settings.sync.baseRev = rRev + 1;
@@ -152,14 +153,12 @@
           this.setStatus('ok', '已强制下载');
           if (App() && App().render) App().render(true);
         } else if (rRev === lBase) {
-          // 云端无新变更 → 上传本地
           local.settings.sync.rev = Math.max(lRev, rRev) + (lRev === rRev ? 1 : 0);
           local.settings.sync.baseRev = local.settings.sync.rev;
           internalSave();
           await this.req('PUT', K.Store.data);
           this.setStatus('ok', '已同步到云端');
         } else if (rRev > lBase) {
-          // 云端更新 → 合并后上传（双向收敛）
           const merged = this.mergeObj(local, remote);
           merged.settings.sync.rev = rRev + 1;
           merged.settings.sync.baseRev = rRev + 1;
@@ -169,7 +168,6 @@
           this.setStatus('ok', '已与云端合并');
           if (App() && App().render) App().render(true);
         } else {
-          // 本地领先 → 上传
           local.settings.sync.baseRev = lRev || 1;
           internalSave();
           await this.req('PUT', K.Store.data);
@@ -207,15 +205,11 @@
         return r;
       };
       if (!c.enabled) { this.setStatus(c.status || 'idle', '未开启'); return; }
-
-      // 首次拉取
       this.once();
-
-      // 联网/切前台时补同步
       w.addEventListener('online', () => this.once());
       document.addEventListener('visibilitychange', () => { if (!document.hidden && w.navigator.onLine) this.once(); });
       w.addEventListener('beforeunload', () => { if (w.navigator.onLine) this.once(); });
-      this.setStatus('ok', '云端同步已开启');
+      this.setStatus('ok', '跨设备同步已开启');
     },
 
     /* ---------- 手动操作 ---------- */
@@ -225,10 +219,7 @@
       this.once();
     },
     test() {
-      return this.req('GET').then(j => {
-        const d = this.unwrap(j);
-        return { ok: true, hasData: !!(d && d.meta), rev: d && d.settings ? d.settings.sync.rev : 0 };
-      });
+      return this.ghApi('GET').then(r => ({ ok: r.ok, status: r.status }));
     },
     forcePush() { return this.once('push'); },
     forcePull() { return this.once('pull'); }
