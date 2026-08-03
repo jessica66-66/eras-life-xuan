@@ -416,6 +416,8 @@
     if (S.sleep.pet && S.sleep.pet.init) petSync();
     // 阅读打卡：旧默认 30 分钟迁移到 60 分钟
     if (S.reading && S.reading.dailyMin === 30) S.reading.dailyMin = 60;
+    // 阅读打卡：旧 JSONBin 云端配置已废弃，清除残留避免状态行显示过期 bin
+    if (S.reading && S.reading.cloud) { S.reading.cloud.bin = ''; S.reading.cloud.readKey = ''; }
     // 阅读打卡：刷新连续天数（未达标自动清零）
     readingCheck(today);
     S.meta.lastRun = today;
