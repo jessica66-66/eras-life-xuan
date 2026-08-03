@@ -919,7 +919,7 @@
       const sy = $('#rSync', root); if (sy) sy.addEventListener('click', () => this.syncWeread(App));
       const pl = $('#rPull', root); if (pl) pl.addEventListener('click', () => this.fetchCloud(App));
       const RC = S.reading;
-      if (RC.cloud && RC.cloud.bin && (RC.sync.weread.lastAt || '').slice(0, 10) !== K.dstr()) this.fetchCloud(App, true);
+      if ((RC.sync.weread.lastAt || '').slice(0, 10) !== K.dstr()) this.fetchCloud(App, true);
       $$('[data-db]', root).forEach(b => b.addEventListener('click', () => {
         K.Sheet.confirm('删除书籍', '删除后该书的阅读记录仍会保留在读完书单与摘抄中，确认删除？', () => {
           S.reading.books = S.reading.books.filter(x => x.id !== b.dataset.db); K.Store.save(); App.render();
@@ -971,19 +971,14 @@
       });
     },
     fetchCloud(App, silent) {
-      const R = K.Store.data.reading, bin = R.cloud && R.cloud.bin;
-      if (!bin) { if (!silent) { K.Toast('请先在「微信读书同步」中填写 JSONBin bin id', 3000); this.syncWeread(App); } return; }
-      const url = 'https://api.jsonbin.io/v3/b/' + encodeURIComponent(bin) + '/latest';
-      const headers = { 'Accept': 'application/json' };
-      if (R.cloud.readKey) headers['X-Access-Key'] = R.cloud.readKey;
+      const url = 'data.json';
       if (!silent) K.Toast('正在从云端拉取微信读书数据…', 1500);
-      fetch(url, { headers, cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))).then(j => {
-        const rec = j && j.record ? j.record : j;
+      fetch(url, { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))).then(rec => {
         const added = D.readingSyncFromWeread(rec || {});
         if (!silent) K.Toast('云端同步完成，新增 ' + added + ' 分钟', 2500);
         if (App && App.render) App.render();
       }).catch(e => {
-        if (!silent) K.Toast('云端拉取失败：' + e.message + '（检查 bin id / 读密钥 / 网络）', 3500);
+        if (!silent) K.Toast('云端拉取失败：' + e.message + '（确认已开启每日自动同步）', 3500);
       });
     },
     syncWeread(App) {
@@ -991,26 +986,20 @@
       K.Sheet.form({
         title: '微信读书同步设置',
         fields: [
-          { k: 'bin', label: 'JSONBin bin id（开启每日自动同步）', value: R.cloud.bin || '', placeholder: '如 64f1a2b8xxxxxxxx（jsonbin.io 创建 bin 后获取）' },
-          { k: 'readKey', label: '读密钥 X-Access-Key（可选）', value: R.cloud.readKey || '', placeholder: 'bin 设为私有才需要；公开 bin 留空即可' },
+          { k: 'cmd', type: 'note', label: '每日自动同步已接入：WorkBuddy 定时任务每天 23:30 读取微信读书数据，写入本应用同源的 data.json，本页打开时自动拉取合并，无需任何密钥配置。' },
           { k: 'dailyMin', label: '每日阅读目标（分钟）', type: 'number', value: R.dailyMin || 60, placeholder: '默认 60' },
-          { k: 'cmd', type: 'note', label: '每日自动同步流程：WorkBuddy 定时任务调用微信读书 Skill 拉数据 → 写入此 bin → 本页打开时自动拉取合并。手动方式：复制下方指令到对话框，把返回 JSON 粘贴到「手动导入」框。' },
           { k: 'prompt', label: '手动同步指令（点击复制）', type: 'textarea', value: '帮我同步微信读书今日阅读数据到 eras-life-xuan 阅读模块，日期：' + today },
           { k: 'json', label: '手动导入 JSON（可选）', type: 'textarea', placeholder: '{"date":"' + today + '","minutes":90,"books":[...]}' }
         ],
         submitText: '保存设置',
         onSubmit: v => {
-          R.cloud.bin = (v.bin || '').trim();
-          R.cloud.readKey = (v.readKey || '').trim();
           R.dailyMin = Math.max(1, K.num(v.dailyMin) || 60);
           K.Store.save();
           if (v.json && v.json.trim()) {
             try { const data = JSON.parse(v.json); const added = D.readingSyncFromWeread(data); K.Toast('导入成功，新增 ' + added + ' 分钟'); App.render(); }
             catch (e) { K.Toast('JSON 解析失败：' + e.message, 3000); App.render(); }
-          } else if (R.cloud.bin) {
-            K.Toast('已保存，正在拉取云端数据…'); this.fetchCloud(App);
           } else {
-            K.Toast('已保存设置'); App.render();
+            K.Toast('已保存，正在拉取云端数据…'); this.fetchCloud(App);
           }
         }
       });
