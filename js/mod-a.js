@@ -776,51 +776,97 @@
   };
 
   /* =======================================================
-     模块 4 · 阅读
+     模块 4 · 阅读（微信读书同步 + 60 分钟打卡 + 连续天数）
      ======================================================= */
   Pages.reading = {
-    tab: 'shelf',
+    tab: 'today',
     render() {
       const S = K.Store.data, today = K.dstr(), R = S.reading;
-      const tl = R.logs.filter(l => l.date === today);
-      const tmin = tl.reduce((s, l) => s + K.num(l.minutes), 0);
+      // 强制刷新连续打卡状态
+      D.readingCheck(today);
+      const todayRep = D.readingReportToday();
+      const weekRep = D.readingReportWeek();
+      const monthRep = D.readingReportMonth();
       const allMin = R.logs.reduce((s, l) => s + K.num(l.minutes), 0);
-      const finished = R.books.filter(b => this.prog(b) >= 100).length;
-      const overall = R.books.length ? Math.round(R.books.reduce((s, b) => s + this.prog(b), 0) / R.books.length) : 0;
+      const finishedCount = R.finished.length;
+      const inProgressCount = R.books.filter(b => (b.progress || 0) < b.pages).length;
+      const syncStatus = R.sync && R.sync.weread ? R.sync.weread.status : 'none';
+      const syncMsg = R.sync && R.sync.weread ? R.sync.weread.msg : '';
       let h = '';
-      h += UI.card({
-        icon: 'i-book', title: '今日阅读', extra: '每日目标 ' + R.dailyMin + ' 分钟',
-        body: '<div style="display:flex;gap:14px;align-items:center">' +
-          '<div>' + K.Chart.ring({ value: K.pct(tmin, R.dailyMin), label: tmin + '′', sub: '/' + R.dailyMin + '′', size: 108, color: '#FFB6D9', color2: '#9FD3FF' }) + '</div>' +
-          '<div style="flex:1;min-width:0">' +
-          '<div class="prow"><span>今日进度</span><b>' + K.pct(tmin, R.dailyMin) + '%</b></div>' + UI.bar(K.pct(tmin, R.dailyMin)) +
-          '<div class="hint" style="margin-top:8px">' + (tmin >= R.dailyMin ? '今日目标已达成，给自己一朵小花 🌸' : '还差 ' + Math.max(0, R.dailyMin - tmin) + ' 分钟达成今日目标') + '</div>' +
-          '</div></div>' +
-          '<div class="btn-row"><button class="btn primary" id="rLog">记录今日阅读</button><button class="btn soft" id="rAdd">添加书籍</button></div>'
-      });
 
-      h += UI.card({
-        icon: 'i-chart', title: '阅读数据', extra: R.books.length + ' 本在读',
-        body: '<div class="grid g4">' + UI.stat(allMin + '′', '累计时长', 'sm') + UI.stat(R.logs.length, '打卡次数', 'sm') +
-          UI.stat(finished, '已读完', 'sm') + UI.stat(overall + '%', '整体完成率', 'sm') + '</div>' +
-          '<div class="chart-box" style="margin-top:10px">' +
-          K.Chart.bar({ labels: K.lastNDays(7).map(K.mdShort), data: K.lastNDays(7).map(d => R.logs.filter(l => l.date === d).reduce((s, l) => s + K.num(l.minutes), 0)), height: 130, target: R.dailyMin, fmt: v => Math.round(v) + '′' }) +
-          '</div><div class="legend"><span><i style="background:linear-gradient(#FFAAD3,#C0A5F5)"></i>近 7 日阅读时长</span><span><i style="background:#F5A8C4"></i>每日 30 分钟目标线</span></div>'
-      });
+      // 顶部快捷统计
+      h += '<div class="grid g4">' +
+        UI.stat(todayRep.minutes + '′', '今日阅读', todayRep.done ? 'mint' : 'sm') +
+        UI.stat(todayRep.streak.current + ' 天', '连续打卡', todayRep.streak.current > 0 ? 'lilac' : 'sm') +
+        UI.stat(finishedCount + ' 本', '已读完', 'sky') +
+        UI.stat(inProgressCount + ' 本', '在读中', 'sm') +
+        '</div>';
 
+      // Tab 导航
       h += '<div class="seg" id="rTab">' +
-        ['shelf|我的书单', 'notes|摘抄感悟', 'rec|中文推荐'].map(x => {
+        ['today|今日', 'week|本周', 'month|月度', 'books|在读书籍', 'finished|读完书单', 'notes|摘抄'].map(x => {
           const p = x.split('|');
           return '<button data-t="' + p[0] + '"' + (this.tab === p[0] ? ' class="on"' : '') + '>' + p[1] + '</button>';
         }).join('') + '</div>';
 
-      if (this.tab === 'shelf') {
+      if (this.tab === 'today') {
         h += UI.card({
-          icon: 'i-book', title: '个人阅读清单',
+          icon: 'i-book', title: '今日阅读数据', extra: todayRep.done ? UI.tag('打卡成功', 'mint') : UI.tag('未达标', 'grey'),
+          body: '<div style="display:flex;gap:14px;align-items:center">' +
+            '<div>' + K.Chart.ring({ value: K.pct(todayRep.minutes, R.dailyMin), label: todayRep.minutes + '′', sub: '/' + R.dailyMin + '′', size: 108, color: todayRep.done ? '#A8E6CF' : '#FFB6D9', color2: '#E8E8F0' }) + '</div>' +
+            '<div style="flex:1;min-width:0">' +
+            '<div class="prow"><span>今日进度</span><b>' + K.pct(todayRep.minutes, R.dailyMin) + '%</b></div>' + UI.bar(K.pct(todayRep.minutes, R.dailyMin), todayRep.done ? 'ok' : '') +
+            '<div class="hint" style="margin-top:8px">' + (todayRep.done ? '今日阅读目标已达成 ✦ 连续打卡 ' + todayRep.streak.current + ' 天' : '还差 ' + Math.max(0, R.dailyMin - todayRep.minutes) + ' 分钟达标，连续打卡不会中断') + '</div>' +
+            '<div class="hint">历史最佳连续打卡：' + todayRep.streak.best + ' 天</div>' +
+            '</div></div>' +
+            '<div class="btn-row">' +
+            '<button class="btn primary" id="rLog">记录今日阅读</button>' +
+            '<button class="btn soft" id="rSync">微信读书同步</button>' +
+            '<button class="btn soft" id="rAdd">添加书籍</button>' +
+            '</div>' +
+            (syncStatus !== 'none' ? '<div class="hint" style="margin-top:8px">微信读书同步：' + esc(syncMsg || syncStatus) + '</div>' : '')
+        });
+        h += UI.card({
+          icon: 'i-chart', title: '近 7 日阅读趋势',
+          body: '<div class="chart-box">' +
+            K.Chart.bar({ labels: K.lastNDays(7).map(K.mdShort), data: K.lastNDays(7).map(d => R.logs.filter(l => l.date === d).reduce((s, l) => s + K.num(l.minutes), 0)), height: 130, target: R.dailyMin, fmt: v => Math.round(v) + '′' }) +
+            '</div><div class="legend"><span><i style="background:linear-gradient(#FFAAD3,#C0A5F5)"></i>近 7 日阅读时长</span><span><i style="background:#F5A8C4"></i>每日 ' + R.dailyMin + ' 分钟目标线</span></div>'
+        });
+      } else if (this.tab === 'week') {
+        h += UI.card({
+          icon: 'i-calendar', title: '本周阅读汇总', extra: '本周打卡 ' + weekRep.okDays + '/7 天',
+          body: '<div class="grid g4">' +
+            UI.stat(Math.round(weekRep.total) + '′', '本周总时长', 'sm') +
+            UI.stat(weekRep.okDays + ' 天', '达标天数', 'sm') +
+            UI.stat(Math.round(weekRep.total / 7) + '′', '日均时长', 'sm') +
+            UI.stat(todayRep.streak.current + ' 天', '当前连续', 'sm') +
+            '</div>' +
+            '<div class="reading-week">' + weekRep.days.map(d =>
+              '<div class="reading-day' + (d.done ? ' done' : '') + (d.future ? ' future' : '') + '">' +
+              '<div class="rd-d">' + d.day + '</div>' +
+              '<div class="rd-ring" style="--p:' + K.pct(d.minutes, R.dailyMin) + '%"><span>' + d.minutes + '</span></div>' +
+              '<div class="rd-bar"><div style="height:' + Math.min(100, K.pct(d.minutes, R.dailyMin)) + '%"></div></div>' +
+              '</div>'
+            ).join('') + '</div>'
+        });
+      } else if (this.tab === 'month') {
+        h += UI.card({
+          icon: 'i-chart', title: '月度阅读报告', extra: monthRep.month,
+          body: '<div class="grid g4">' +
+            UI.stat(Math.round(monthRep.total) + '′', '本月总时长', 'sm') +
+            UI.stat(monthRep.okDays + ' 天', '达标天数', 'sm') +
+            UI.stat(monthRep.days + ' 天', '阅读天数', 'sm') +
+            UI.stat(monthRep.finished + ' 本', '本月读完', 'sm') +
+            '</div>' +
+            '<div class="hint" style="margin-top:10px">按微信读书规则：单日阅读 ≥ ' + R.dailyMin + ' 分钟计为打卡成功；未达标当日连续天数清零。</div>'
+        });
+      } else if (this.tab === 'books') {
+        h += UI.card({
+          icon: 'i-book', title: '在读书籍进度',
           body: R.books.length ? R.books.map(b => {
             const p = this.prog(b), read = this.readPage(b);
             return '<div class="li book-li" style="display:block" data-book="' + b.id + '"><div class="book">' +
-              '<div class="book-cv">' + esc(b.title.slice(0, 4)) + '</div>' +
+              (b.cover ? '<img class="book-cv-img" src="' + esc(b.cover) + '" loading="lazy" alt="">' : '<div class="book-cv">' + esc(b.title.slice(0, 4)) + '</div>') +
               '<div style="flex:1;min-width:0"><div class="li-t">' + esc(b.title) + '</div>' +
               '<div class="li-s">' + UI.tag(esc(b.author || '佚名'), 'lilac') + UI.tag('读到 ' + read + '/' + b.pages + ' 页', 'sky') + (p >= 100 ? UI.tag('已读完 ✓', 'mint') : '') + '</div>' +
               '<div style="margin-top:6px">' + UI.bar(p, p >= 100 ? 'ok' : '') + '</div></div>' +
@@ -828,7 +874,19 @@
               '</div></div>';
           }).join('') : UI.empty('书架还空着，先添加一本想读的中文书吧', 'i-book')
         });
-      } else if (this.tab === 'notes') {
+      } else if (this.tab === 'finished') {
+        h += UI.card({
+          icon: 'i-check', title: '完整读完书单',
+          extra: finishedCount + ' 本',
+          body: R.finished.length ? R.finished.slice().reverse().map(b =>
+            '<div class="li book-li" style="display:block"><div class="book">' +
+            (b.cover ? '<img class="book-cv-img" src="' + esc(b.cover) + '" loading="lazy" alt="">' : '<div class="book-cv">' + esc(b.title.slice(0, 4)) + '</div>') +
+            '<div style="flex:1;min-width:0"><div class="li-t">' + esc(b.title) + '</div>' +
+            '<div class="li-s">' + UI.tag(esc(b.author || '佚名'), 'lilac') + UI.tag('读完于 ' + b.finishedAt, 'mint') + UI.tag('共 ' + (b.totalMinutes || 0) + ' 分钟', 'sky') + '</div></div>' +
+            '</div></div>'
+          ).join('') : UI.empty('还没有读完的书，坚持阅读，第一本书正在路上 ✦', 'i-book')
+        });
+      } else {
         const logs = R.logs.slice().reverse().slice(0, 40).filter(l => l.quote || l.thought);
         h += UI.card({
           icon: 'i-pen', title: '文字摘抄 · 个人感悟',
@@ -841,23 +899,6 @@
               '</div>';
           }).join('') : UI.empty('还没有摘抄，记录阅读时可以写下打动你的句子', 'i-pen')
         });
-      } else {
-        h += UI.card({
-          icon: 'i-sparkle', title: '中文优质书籍推荐', extra: '<button class="btn xs ghost" id="recRe">换一批</button>',
-          body: this.recBooks().map(b =>
-            '<div class="li"><div class="book-cv" style="width:34px;height:46px;font-size:9px">' + esc(b.t.slice(0, 3)) + '</div>' +
-            '<div class="li-main"><div class="li-t">' + esc(b.t) + '</div>' +
-            '<div class="li-s">' + UI.tag(b.a, 'lilac') + UI.tag(b.tag, 'sky') + '</div>' +
-            '<div class="hint" style="margin-top:4px">' + esc(b.d) + '</div></div>' +
-            '<div class="li-act"><button class="mini-btn" data-ab="' + esc(b.t) + '|' + esc(b.a) + '">' + ico('i-plus') + '</button></div></div>'
-          ).join('') + '<div class="hint" style="margin-top:8px">✦ 推荐库仅收录中文书籍与文章，已全程排除英文内容。</div>'
-        });
-        h += UI.card({
-          icon: 'i-news', title: '中文好文推荐', cls: 'tex-news',
-          body: D.ARTICLE_RECS.map(a =>
-            '<div class="li"><div class="li-main"><div class="li-t">' + esc(a.t) + '</div>' +
-            '<div class="li-s">' + UI.tag(a.src, 'lilac') + '</div><div class="hint" style="margin-top:4px">' + esc(a.d) + '</div></div></div>').join('')
-        });
       }
       return h;
     },
@@ -867,29 +908,20 @@
       const logs = K.Store.data.reading.logs.filter(l => l.bookId === b.id);
       return logs.reduce((m, l) => Math.max(m, K.num(l.page)), 0);
     },
-    recBooks() {
-      const arr = D.BOOK_RECS.filter(b => D.hasCN(b.t)).slice();
-      arr.sort(() => Math.random() - .5);
-      return arr.slice(0, 6);
-    },
     mount(root, App) {
       const S = K.Store.data;
       $$('#rTab [data-t]', root).forEach(b => b.addEventListener('click', () => { this.tab = b.dataset.t; App.render(); }));
       const ad = $('#rAdd', root); if (ad) ad.addEventListener('click', () => this.addBook(App));
       const lg = $('#rLog', root); if (lg) lg.addEventListener('click', () => this.log(App));
-      const rr = $('#recRe', root); if (rr) rr.addEventListener('click', () => App.render());
+      const sy = $('#rSync', root); if (sy) sy.addEventListener('click', () => this.syncWeread(App));
       $$('[data-db]', root).forEach(b => b.addEventListener('click', () => {
-        K.Sheet.confirm('删除书籍', '删除后该书的阅读记录仍会保留在摘抄中，确认删除？', () => {
+        K.Sheet.confirm('删除书籍', '删除后该书的阅读记录仍会保留在读完书单与摘抄中，确认删除？', () => {
           S.reading.books = S.reading.books.filter(x => x.id !== b.dataset.db); K.Store.save(); App.render();
         }, '删除');
       }));
       $$('[data-book]', root).forEach(b => b.addEventListener('click', e => {
         if (e.target.closest('[data-db]')) return;
         App.openReader(b.dataset.book);
-      }));
-      $$('[data-ab]', root).forEach(b => b.addEventListener('click', () => {
-        const p = b.dataset.ab.split('|');
-        this.addBook(App, { title: p[0], author: p[1] });
       }));
     },
     addBook(App, pre) {
@@ -900,10 +932,11 @@
           { k: 'title', label: '书名', required: true, value: pre ? pre.title : '', validate: v => D.hasCN(v) ? '' : '本工作台仅收录中文书籍，请填写中文书名' },
           { k: 'author', label: '作者', value: pre ? pre.author : '' },
           { k: 'pages', label: '书籍总页数', type: 'number', required: true, placeholder: '如 320' },
+          { k: 'cover', label: '封面 URL（可选）', placeholder: '粘贴微信读书封面链接' },
           { k: 'content', label: '书籍全文（可选，粘贴后开启分页阅读与摘抄）', type: 'textarea', placeholder: '在此粘贴书籍全文，系统会自动分页；留空也可稍后在阅读器内补录' }
         ],
         onSubmit: v => {
-          S.reading.books.push({ id: K.uid(), title: v.title, author: v.author, pages: K.num(v.pages), content: (v.content || '').trim(), progress: 0, at: K.dstr() });
+          S.reading.books.push({ id: K.uid(), title: v.title, author: v.author, pages: K.num(v.pages), cover: (v.cover || '').trim(), content: (v.content || '').trim(), progress: 0, at: K.dstr() });
           K.Store.save(); K.Toast('已加入书单 ✦'); App.render();
         }
       });
@@ -922,15 +955,40 @@
         ],
         submitText: '保存记录',
         onSubmit: v => {
-          S.reading.logs.push({ id: K.uid(), date: today, bookId: v.bookId, minutes: K.num(v.minutes), page: K.num(v.page), quote: v.quote, thought: v.thought });
+          D.readingAddLog({ bookId: v.bookId, minutes: K.num(v.minutes), page: K.num(v.page), quote: v.quote, thought: v.thought, source: 'manual' });
           const d = S.todo.days[today];
           if (d) { const it = d.items.find(x => x.title === '阅读打卡'); if (it && !it.done) { it.done = true; it.doneAt = K.tstr(); } }
-          K.Store.save();
-          const tot = S.reading.logs.filter(l => l.date === today).reduce((s, l) => s + K.num(l.minutes), 0);
+          const tot = D.readingToday();
           K.Toast(tot >= S.reading.dailyMin ? '今日阅读目标已达成 ✦' : '已记录，今天还差 ' + (S.reading.dailyMin - tot) + ' 分钟');
           App.render();
         }
       });
+    },
+    syncWeread(App) {
+      const today = K.dstr();
+      K.Sheet.form({
+        title: '微信读书数据同步',
+        fields: [
+          { k: 'cmd', type: 'note', label: '因微信读书接口需要授权密钥且受浏览器安全限制，前端无法直接自动拉取。推荐方式：复制下方指令到 WorkBuddy 对话框，让 Agent 调用微信读书 Skill 后，把返回的 JSON 粘贴到下方文本框导入。' },
+          { k: 'prompt', label: '同步指令（点击复制）', type: 'textarea', value: '帮我同步微信读书今日阅读数据到 eras-life-xuan 阅读模块，日期：' + today },
+          { k: 'json', label: '粘贴 Agent 返回的 JSON', type: 'textarea', placeholder: '{"date":"' + today + '","minutes":90,"books":[...]}' }
+        ],
+        submitText: '导入数据',
+        onSubmit: v => {
+          try {
+            const data = JSON.parse(v.json || '{}');
+            const added = D.readingSyncFromWeread(data);
+            K.Toast('微信读书同步成功，新增 ' + added + ' 分钟'); App.render();
+          } catch (e) {
+            K.Toast('JSON 解析失败：' + e.message, 3000);
+          }
+        }
+      });
+      // 自动选中并复制指令
+      setTimeout(() => {
+        const ta = $('#f_prompt');
+        if (ta) { ta.select(); if (navigator.clipboard) navigator.clipboard.writeText(ta.value).catch(() => {}); }
+      }, 200);
     }
   };
 
