@@ -219,6 +219,11 @@ a{color:var(--lilac-400);text-decoration:none;}
 /* 列表项 */
 .li{display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:16px;background:rgba(255,255,255,.6);
   border:1px solid rgba(255,255,255,.7);margin-bottom:8px;min-height:48px;}
+.fund-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 10px;border-radius:14px;background:rgba(255,255,255,.6);
+  border:1px solid rgba(255,255,255,.7);margin-bottom:8px;}
+.fund-row .fund-info{display:flex;align-items:center;gap:8px;flex:1;min-width:0;font-size:13px;font-weight:650;color:var(--ink-1);}
+.fund-row .fund-info .ic{flex:none;width:18px;height:18px;}
+.fund-row .fund-info span{flex:1;min-width:0;word-break:break-word;}
 .li:last-child{margin-bottom:0;}
 .li-main{flex:1;min-width:0;}
 .li-t{font-size:13.5px;font-weight:650;line-height:1.4;word-break:break-word;}
