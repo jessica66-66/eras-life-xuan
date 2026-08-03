@@ -29,6 +29,59 @@
     { v: 'i-disco', t: '🪩 迪斯科球' }, { v: 'i-snow', t: '❄️ 雪花' }
   ];
 
+  /* =========================================================
+     云养萌宠 · 数据层（全部为写实真实猫狗照片，非卡通）
+     图源：TheCatAPI / Dog CEO 品种照片库
+     每个品种 6 张：0~3 对应四个成长形态，4 用于庆祝动态，5 用于图鉴封面
+     ========================================================= */
+  const PET_BREEDS = [
+    { id: 'ragdoll', name: '布偶猫', kind: 'cat', tone: '#FFE3EF', tag: '温柔黏人', imgs: ['https://cdn2.thecatapi.com/images/aWVfoSN_K.jpg', 'https://cdn2.thecatapi.com/images/oGefY4YoG.jpg', 'https://cdn2.thecatapi.com/images/83htMb1AJ.jpg', 'https://cdn2.thecatapi.com/images/smuGD4z2U.jpg', 'https://cdn2.thecatapi.com/images/QZYN75HxN.jpg', 'https://cdn2.thecatapi.com/images/xPkUTg4-N.jpg'] },
+    { id: 'britishshort', name: '英国短毛猫', kind: 'cat', tone: '#E6EEF8', tag: '稳重憨厚', imgs: ['https://cdn2.thecatapi.com/images/GrPErz7EA.jpg', 'https://cdn2.thecatapi.com/images/1bFFj7N5c.jpg', 'https://cdn2.thecatapi.com/images/xNuSF5YWY.jpg', 'https://cdn2.thecatapi.com/images/IouWtnMl2.jpg', 'https://cdn2.thecatapi.com/images/utX9jo5EO.jpg', 'https://cdn2.thecatapi.com/images/N8bl5RjPG.jpg'] },
+    { id: 'siamese', name: '暹罗猫', kind: 'cat', tone: '#F0E6DA', tag: '机灵爱说话', imgs: ['https://cdn2.thecatapi.com/images/DFHMMPNcD.jpg', 'https://cdn2.thecatapi.com/images/O2aNhFGU-.jpg', 'https://cdn2.thecatapi.com/images/Xwp-MBOtI.jpg', 'https://cdn2.thecatapi.com/images/nwrkX6GhX.jpg', 'https://cdn2.thecatapi.com/images/e0sS4bZcP.jpg', 'https://cdn2.thecatapi.com/images/VsaXX13yt.jpg'] },
+    { id: 'mainecoon', name: '缅因猫', kind: 'cat', tone: '#EFE8DC', tag: '温柔巨人', imgs: ['https://cdn2.thecatapi.com/images/MtgMsxPw9.jpg', 'https://cdn2.thecatapi.com/images/PoZIVJ124.jpg', 'https://cdn2.thecatapi.com/images/EwApDDFZR.jpg', 'https://cdn2.thecatapi.com/images/PKblw2RPe.jpg', 'https://cdn2.thecatapi.com/images/LIQSvUemz.jpg', 'https://cdn2.thecatapi.com/images/ftmw29QPb.jpg'] },
+    { id: 'scottishfold', name: '苏格兰折耳猫', kind: 'cat', tone: '#F3E9F6', tag: '安静乖巧', imgs: ['https://cdn2.thecatapi.com/images/nd9FDCrLY.jpg', 'https://cdn2.thecatapi.com/images/OlCMYSMZD.jpg', 'https://cdn2.thecatapi.com/images/TOozwr2OD.jpg', 'https://cdn2.thecatapi.com/images/JVITS8pXF.jpg', 'https://cdn2.thecatapi.com/images/IboDUkK8K.jpg', 'https://cdn2.thecatapi.com/images/O4zh8w0vB.jpg'] },
+    { id: 'persian', name: '波斯猫', kind: 'cat', tone: '#FBEDE4', tag: '优雅贵气', imgs: ['https://cdn2.thecatapi.com/images/RhBsBQg6y.jpg', 'https://cdn2.thecatapi.com/images/d_RzH-Zft.jpg', 'https://cdn2.thecatapi.com/images/AYfFc4vOB.jpg', 'https://cdn2.thecatapi.com/images/e7-hS3gey.jpg', 'https://cdn2.thecatapi.com/images/zFm4AbO-d.jpg', 'https://cdn2.thecatapi.com/images/tSbM4vHB_.png'] },
+    { id: 'golden', name: '金毛寻回犬', kind: 'dog', tone: '#FDECD2', tag: '暖心陪伴', imgs: ['https://images.dog.ceo/breeds/retriever-golden/n02099601_8181.jpg', 'https://images.dog.ceo/breeds/retriever-golden/joey_img_0261.jpg', 'https://images.dog.ceo/breeds/retriever-golden/joey_20210805_130226.jpg', 'https://images.dog.ceo/breeds/retriever-golden/n02099601_816.jpg', 'https://images.dog.ceo/breeds/retriever-golden/mori_2.jpg', 'https://images.dog.ceo/breeds/retriever-golden/n02099601_7744.jpg'] },
+    { id: 'corgi', name: '柯基犬', kind: 'dog', tone: '#FFE9DC', tag: '短腿元气', imgs: ['https://images.dog.ceo/breeds/corgi/13263927_10154125975153449_6587119903523649180_n.jpg', 'https://images.dog.ceo/breeds/corgi-cardigan/n02113186_13102.jpg', 'https://images.dog.ceo/breeds/corgi-cardigan/n02113186_11017.jpg', 'https://images.dog.ceo/breeds/corgi-cardigan/n02113186_12499.jpg', 'https://images.dog.ceo/breeds/corgi-cardigan/n02113186_4536.jpg', 'https://images.dog.ceo/breeds/corgi-cardigan/n02113186_9935.jpg'] },
+    { id: 'shiba', name: '柴犬', kind: 'dog', tone: '#FFE7D6', tag: '倔强可爱', imgs: ['https://images.dog.ceo/breeds/shiba/shiba-16.jpg', 'https://images.dog.ceo/breeds/shiba/shiba-7.jpg', 'https://images.dog.ceo/breeds/shiba/mamehiko01.jpg', 'https://images.dog.ceo/breeds/shiba/shiba-13.jpg', 'https://images.dog.ceo/breeds/shiba/shiba-6.jpg', 'https://images.dog.ceo/breeds/shiba/mamehiko02.jpg'] },
+    { id: 'husky', name: '哈士奇', kind: 'dog', tone: '#E4F0FA', tag: '活力戏精', imgs: ['https://images.dog.ceo/breeds/husky/n02110185_11138.jpg', 'https://images.dog.ceo/breeds/husky/n02110185_1338.jpg', 'https://images.dog.ceo/breeds/husky/n02110185_7888.jpg', 'https://images.dog.ceo/breeds/husky/n02110185_12120.jpg', 'https://images.dog.ceo/breeds/husky/n02110185_698.jpg', 'https://images.dog.ceo/breeds/husky/n02110185_1598.jpg'] },
+    { id: 'samoyed', name: '萨摩耶', kind: 'dog', tone: '#EEF4FB', tag: '微笑天使', imgs: ['https://images.dog.ceo/breeds/samoyed/n02111889_5075.jpg', 'https://images.dog.ceo/breeds/samoyed/n02111889_6249.jpg', 'https://images.dog.ceo/breeds/samoyed/n02111889_2136.jpg', 'https://images.dog.ceo/breeds/samoyed/n02111889_2361.jpg', 'https://images.dog.ceo/breeds/samoyed/ruby.jpg', 'https://images.dog.ceo/breeds/samoyed/n02111889_12171.jpg'] },
+    { id: 'labrador', name: '拉布拉多', kind: 'dog', tone: '#F2EBDD', tag: '忠厚稳重', imgs: ['https://images.dog.ceo/breeds/labrador/n02099712_2473.jpg', 'https://images.dog.ceo/breeds/labrador/n02099712_3197.jpg', 'https://images.dog.ceo/breeds/labrador/n02099712_6455.jpg', 'https://images.dog.ceo/breeds/labrador/n02099712_3753.jpg', 'https://images.dog.ceo/breeds/labrador/n02099712_7815.jpg', 'https://images.dog.ceo/breeds/labrador/n02099712_4845.jpg'] }
+  ];
+
+  /* 成长形态：依据「累计早睡打卡天数」，永不退化 */
+  const PET_STAGES = [
+    { i: 0, need: 0, name: '初见幼生', desc: '刚被你接回家，还有点怕生' },
+    { i: 1, need: 15, name: '幼崽形态', desc: '开始黏着你，会主动蹭手心了' },
+    { i: 2, need: 45, name: '少年形态', desc: '毛色油亮，眼睛里全是光' },
+    { i: 3, need: 90, name: '成年完全体', desc: '沉稳漂亮，是你 90 天早睡换来的' }
+  ];
+
+  /* 连续早睡阶梯里程碑（一轮 90 天）— 类型：feed 饲料 / acc 配饰 / scene 场景 / fx 特效 / outfit 穿搭 / toy 玩具 / rare 稀有 */
+  const PET_MILESTONES = [
+    { day: 3, type: 'feed', id: 'feedpack1', name: '基础饲料礼包', desc: '一次性发放 10 袋优质饲料', emo: '🍖', gain: 10 },
+    { day: 7, type: 'acc', id: 'acc_collar', name: '宠物配饰 · 铃铛项圈', desc: '走起路来会叮当响的小项圈', emo: '🔔' },
+    { day: 14, type: 'scene', id: 'scene_home', name: '简易居家背景', desc: '有地毯和暖灯的小客厅', emo: '🏠', bg: 'linear-gradient(160deg,#FFF3E4,#FFE6D2 55%,#F6DFC8)' },
+    { day: 21, type: 'fx', id: 'fx_heart', name: '基础互动效果 · 爱心气泡', desc: '点它的时候会冒出爱心', emo: '💗' },
+    { day: 30, type: 'outfit', id: 'outfit_knit', name: '第一套穿搭 · 米色针织衫', desc: '写实风格的软糯针织，冬天刚好', emo: '🧶', filter: 'saturate(1.06) contrast(1.02)' },
+    { day: 45, type: 'toy', id: 'toy_ball', name: '宠物玩具 · 毛线球', desc: '放进家园里，它会自己玩', emo: '🧵' },
+    { day: 60, type: 'scene', id: 'scene_autumn', name: '季节家园 · 秋日暖阳', desc: '解锁季节场景，同时新增待机动作', emo: '🍂', bg: 'linear-gradient(160deg,#FFEFD8,#FFDCC0 50%,#F2C9A6)', idle: true },
+    { day: 75, type: 'fx', id: 'fx_light', name: '专属环境光影特效', desc: '午后斜射进来的那束光', emo: '✨' },
+    { day: 90, type: 'rare', id: 'rare_royal', name: '稀有主题套装 + 纪念勋章', desc: '限定套装、专属电子勋章，并解锁新品种领养资格', emo: '👑', filter: 'saturate(1.12) contrast(1.04) brightness(1.02)' }
+  ];
+
+  const PET_CFG = { len: 90, days: [3, 7, 14, 21, 30, 45, 60, 75, 90], feedGood: 3, feedMid: 1, growthPerFeed: 10, lvUp: 100 };
+
+  const PET_TALK = [
+    '呼噜呼噜——它把头埋进你手心里', '它轻轻咬了下你的袖口，然后跑开了', '尾巴甩得像小风扇，它很开心',
+    '它翻了个身，露出肚皮示意你摸', '它盯着你看了三秒，然后打了个哈欠', '它把玩具叼过来，放在你脚边',
+    '它蹭了蹭你的手腕，留下一点温度', '它踩了踩你的手掌，像在给你按摩'
+  ];
+  const PET_CHEER = [
+    '今天也早睡啦，它嗅到了饲料的味道！', '你按时上床的样子，它全看在眼里 ✦',
+    '连击 +1，它开心地绕着你转圈', '又是安稳的一晚，它趴在你枕边睡着了'
+  ];
+
   /* ---------- 待办固定分类 ---------- */
   const TODO_CATS = [
     { id: 'morning', name: '晨间必做', icon: 'i-sparkle', items: ['起床打卡', '喝水', '查看今日目标'], pri: 'mid' },
@@ -273,7 +326,23 @@
       },
       sleep: {
         std: { bed: '23:00', focus: '22:40', wake: '07:00', redline: '23:30' },
-        logs: [], rewards: { mvUnlocked: false, lastUnlock: '' }, penalties: {}
+        logs: [], rewards: { mvUnlocked: false, lastUnlock: '' }, penalties: {},
+        pet: {
+          init: false,            // 是否已完成初次领养
+          cur: '',                // 当前正在查看/饲养的宠物 id
+          list: [],               // [{id,breed,name,adoptedAt,round}]
+          feed: 0,                // 饲料库存（全部宠物共享）
+          growth: {},             // {petId: 累计成长值}
+          bag: { acc: [], scene: [], fx: [], outfit: [], toy: [], rare: [], medal: [] },
+          dress: {},              // {petId:{acc,scene,fx,outfit,toy}}
+          done: [],               // 已达成的里程碑 day 数组（永久保留）
+          tickets: 1,             // 领养资格券
+          cycle: { start: '', round: 1, rounds: 0 },
+          cfg: { len: 90, days: [3, 7, 14, 21, 30, 45, 60, 75, 90], feedGood: 3, feedMid: 1, growthPerFeed: 10, lvUp: 100 },
+          nameOv: {},             // 里程碑奖励改名：{day:{name,desc}}
+          lastFeedDate: '',       // 上次自动发饲料的日期
+          log: []                 // 最近动态（最多 30 条）
+        }
       },
       mood: { logs: [], favs: [], recent: [], heal: [] },
       review: { months: {} },
@@ -335,6 +404,8 @@
     if (sleepStreak() >= 7 && !S.sleep.rewards.mvUnlocked) {
       S.sleep.rewards.mvUnlocked = true; S.sleep.rewards.lastUnlock = today;
     }
+    // 云养萌宠：补结算里程碑（断签不回收，已解锁永久保留）
+    if (S.sleep.pet && S.sleep.pet.init) petSync();
     S.meta.lastRun = today;
     K.Store.save();
   }
@@ -416,10 +487,108 @@
       .concat(custom.map(f => ({ id: f.id, name: f.name, icon: f.icon || 'i-sparkle', c: f.c || '#B197F0' })));
   }
 
+  /* =========================================================
+     云养萌宠 · 逻辑
+     ========================================================= */
+  function petData() { return K.Store.data.sleep.pet; }
+  function petCfg() { return Object.assign({}, PET_CFG, petData().cfg || {}); }
+  function breedOf(id) { return PET_BREEDS.find(b => b.id === id) || PET_BREEDS[0]; }
+
+  /* 累计早睡达标天数（决定成长形态，断签不影响） */
+  function petTotalDays() {
+    return K.Store.data.sleep.logs.filter(l => l.state === 'good').length;
+  }
+  function petStage(total) {
+    const t = total == null ? petTotalDays() : total;
+    let s = PET_STAGES[0];
+    PET_STAGES.forEach(x => { if (t >= x.need) s = x; });
+    return s;
+  }
+  /* 距离下一形态 */
+  function petNextStage(total) {
+    const t = total == null ? petTotalDays() : total;
+    return PET_STAGES.find(x => t < x.need) || null;
+  }
+
+  /* 里程碑列表：合并后台配置的天数与改名覆盖 */
+  function petMilestones() {
+    const P = petData(), cfg = petCfg(), ov = P.nameOv || {};
+    return PET_MILESTONES.map((m, i) => {
+      const day = K.num(cfg.days[i] != null ? cfg.days[i] : m.day);
+      const o = ov[m.id] || {};
+      return Object.assign({}, m, { day: day, name: o.name || m.name, desc: o.desc || m.desc });
+    }).sort((a, b) => a.day - b.day);
+  }
+
+  /* 当前宠物 */
+  function petCur() {
+    const P = petData();
+    if (!P.list.length) return null;
+    return P.list.find(p => p.id === P.cur) || P.list[0];
+  }
+  function petLv(pid) {
+    const P = petData(), cfg = petCfg();
+    const g = K.num(P.growth[pid] || 0);
+    return { g: g, lv: Math.floor(g / cfg.lvUp) + 1, cur: g % cfg.lvUp, need: cfg.lvUp };
+  }
+  function petLog(text) {
+    const P = petData();
+    P.log.unshift({ t: K.dstr() + ' ' + new Date().toTimeString().slice(0, 5), x: text });
+    if (P.log.length > 30) P.log.length = 30;
+  }
+
+  /* 结算：里程碑 + 周期完成。返回本次新解锁的里程碑数组 */
+  function petSync() {
+    const P = petData();
+    if (!P.init) return [];
+    const streak = sleepStreak(), cfg = petCfg(), list = petMilestones(), got = [];
+    list.forEach(m => {
+      if (streak >= m.day && P.done.indexOf(m.id) < 0) {
+        P.done.push(m.id);
+        got.push(m);
+        if (m.type === 'feed') P.feed += K.num(m.gain || 10);
+        else if (m.type === 'rare') {
+          if (P.bag.rare.indexOf(m.id) < 0) P.bag.rare.push(m.id);
+          if (P.bag.medal.indexOf('medal_r' + P.cycle.round) < 0) P.bag.medal.push('medal_r' + P.cycle.round);
+        } else if (P.bag[m.type] && P.bag[m.type].indexOf(m.id) < 0) P.bag[m.type].push(m.id);
+        petLog('解锁里程碑：' + m.name);
+      }
+    });
+    // 一轮全部里程碑达成 → 发放新品种领养资格，周期进入下一轮
+    const all = list.every(m => P.done.indexOf(m.id) >= 0);
+    if (all && streak >= cfg.len && P.cycle.rounds < P.cycle.round) {
+      P.cycle.rounds = P.cycle.round;
+      P.cycle.round += 1;
+      P.tickets += 1;
+      P.done = [];                    // 新一轮里程碑重新计数（奖励已永久入库）
+      P.cycle.start = K.dstr();
+      petLog('完成第 ' + P.cycle.rounds + ' 轮 ' + cfg.len + ' 天周期，获得 1 张新品种领养资格');
+      got.push({ type: 'round', name: '周期通关', day: cfg.len, emo: '🏆', desc: '获得新品种领养资格 ×1' });
+    }
+    K.Store.save();
+    return got;
+  }
+
+  /* 每日打卡自动发饲料（同一天只发一次） */
+  function petDailyFeed(state) {
+    const P = petData(), cfg = petCfg(), today = K.dstr();
+    if (!P.init) return 0;
+    if (P.lastFeedDate === today) return 0;
+    const n = state === 'good' ? K.num(cfg.feedGood) : state === 'mid' ? K.num(cfg.feedMid) : 0;
+    if (n <= 0) return 0;
+    P.feed += n; P.lastFeedDate = today;
+    petLog('早睡打卡领取饲料 ×' + n);
+    K.Store.save();
+    return n;
+  }
+
   w.D = {
     MODULES, ICON_CHOICES, TODO_CATS, PRI, EXP_CATS, INC_CATS, FUNDS, MOODS, QUOTES,
     BOOK_RECS, ARTICLE_RECS, MV_LIST, WMO, hasCN, HOTSPOTS, HEALING,
+    PET_BREEDS, PET_STAGES, PET_MILESTONES, PET_CFG, PET_TALK, PET_CHEER,
     defaults, ensureTodoDay, runDailyJobs, sleepStreak, wordStreak,
-    todoRate, weekTodoRate, savedTotal, monthStat, rankOf, allFunds
+    todoRate, weekTodoRate, savedTotal, monthStat, rankOf, allFunds,
+    petData, petCfg, breedOf, petTotalDays, petStage, petNextStage,
+    petMilestones, petCur, petLv, petLog, petSync, petDailyFeed
   };
 })(window);
