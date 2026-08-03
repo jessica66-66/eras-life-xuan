@@ -323,7 +323,8 @@
         logs: [],                   // 每日阅读明细 [{id, date, bookId, minutes, page, quote, thought, source, importedAt}]
         finished: [],               // 已读完书籍清单（永久保留）[{id, bookId, title, author, cover, finishedAt, totalMinutes}]
         streak: { current: 0, best: 0, lastCheck: '' }, // 连续打卡天数（未达标则清零）
-        sync: { weread: { lastAt: '', lastMinutes: 0, status: 'none', msg: '' } }
+        sync: { weread: { lastAt: '', lastMinutes: 0, status: 'none', msg: '' } },
+        cloud: { bin: '', readKey: '' } // 微信读书自动同步云端中转（JSONBin）：bin id 与读密钥，由用户在阅读模块内填写
       },
       savings: {
         goal: { annual: 0, monthlyLiving: 0, emergency: 0 },
