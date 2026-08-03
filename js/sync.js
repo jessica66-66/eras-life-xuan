@@ -28,7 +28,7 @@
       const c = this.config();
       if (!c.token) throw new Error('请先在设置中填写 GitHub Token');
       const headers = {
-        'Authorization': 'token ' + c.token,
+        'Authorization': 'token ' + (c.token || '').trim(),
         'Content-Type': 'application/json',
         'Accept': 'application/vnd.github+json',
         'User-Agent': 'eras-life-xuan'
