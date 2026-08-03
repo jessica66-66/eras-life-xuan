@@ -313,7 +313,7 @@
         homeCards: ['days', 'clock', 'weather', 'news', 'jump', 'overview'],
         city: { name: '北京', lat: 39.9042, lon: 116.4074, auto: true },
         notify: false,
-        sync: { enabled: false, mode: 'jsonbin', bin: '', key: '', url: '', headers: '', last: '', status: '', rev: 0, baseRev: 0 }
+        sync: { enabled: false, mode: 'github', token: '', branch: 'main', status: '', lastSync: '', rev: 0, baseRev: 0 }
       },
       todo: { days: {}, cats: TODO_CATS.map(c => ({ id: c.id, name: c.name, icon: c.icon })) },
       words: { days: {}, errors: [], target: { minutes: 20, count: 30 } },
