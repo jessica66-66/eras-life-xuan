@@ -10,7 +10,7 @@
     { id: 'home', name: '首页', desc: '每日动态主页', icon: 'i-heart', slogan: 'I can see you shining in your own eras・璇', sloganCn: '我看见你，在属于你的时代里闪闪发光' },
     { id: 'todo', name: '待办', desc: '日期记录 + 全功能管控', icon: 'i-news', slogan: 'Long live the walls we crashed through', sloganCn: '万岁！让我们像勇士一般并肩穿越困难艰险' },
     { id: 'words', name: '单词', desc: '打卡统计 + 易错留存', icon: 'i-pen', slogan: 'Words are the keys to more worlds', sloganCn: '词汇，是看见更多世界的钥匙' },
-    { id: 'reading', name: '阅读', desc: '中文书籍 · 每日 30 分钟', icon: 'i-book', slogan: 'I found peace in your melody', sloganCn: '我在你的旋律里，找到了安宁' },
+    { id: 'reading', name: '阅读', desc: '中文书籍 · 每日 60 分钟', icon: 'i-book', slogan: 'I found peace in your melody', sloganCn: '我在你的旋律里，找到了安宁' },
     { id: 'savings', name: '存款', desc: '可视化记账 + 存钱规划', icon: 'i-gem', slogan: "Best believe I'm still bejeweled, when I walk in the room", sloganCn: '财富慢慢积攒，自己永远闪耀' },
     { id: 'sleep', name: '早睡', desc: '睡眠管控 + 奖惩自动化', icon: 'i-sweater', slogan: 'Quiet nights build brighter mornings', sloganCn: '宁静的夜晚孕育更明亮的清晨' },
     { id: 'mood', name: '心情', desc: '情绪记录 + 金句 + 看板', icon: 'i-vinyl', slogan: 'You are the album cover of your own feelings', sloganCn: '你的心情，本身就是一张封面' },
@@ -317,7 +317,14 @@
       },
       todo: { days: {}, cats: TODO_CATS.map(c => ({ id: c.id, name: c.name, icon: c.icon })) },
       words: { days: {}, errors: [], target: { minutes: 20, count: 30 } },
-      reading: { books: [], logs: [], dailyMin: 30 },
+      reading: {
+        dailyMin: 60,               // 微信读书同步规则：当日有效阅读时长 ≥60 分钟视为打卡成功
+        books: [],                  // 在读书籍 [{id, title, author, pages, progress, cover, at}]
+        logs: [],                   // 每日阅读明细 [{id, date, bookId, minutes, page, quote, thought, source, importedAt}]
+        finished: [],               // 已读完书籍清单（永久保留）[{id, bookId, title, author, cover, finishedAt, totalMinutes}]
+        streak: { current: 0, best: 0, lastCheck: '' }, // 连续打卡天数（未达标则清零）
+        sync: { weread: { lastAt: '', lastMinutes: 0, status: 'none', msg: '' } }
+      },
       savings: {
         goal: { annual: 0, monthlyLiving: 0, emergency: 0 },
         records: [],
@@ -406,6 +413,8 @@
     }
     // 云养萌宠：补结算里程碑（断签不回收，已解锁永久保留）
     if (S.sleep.pet && S.sleep.pet.init) petSync();
+    // 阅读打卡：刷新连续天数（未达标自动清零）
+    readingCheck(today);
     S.meta.lastRun = today;
     K.Store.save();
   }
@@ -485,6 +494,138 @@
     const custom = (S.savings && S.savings.customFunds) || [];
     return FUNDS.map(f => ({ id: f.id, name: overrides[f.id] || f.name, icon: f.icon, c: f.c }))
       .concat(custom.map(f => ({ id: f.id, name: f.name, icon: f.icon || 'i-sparkle', c: f.c || '#B197F0' })));
+  }
+
+  /* =========================================================
+     阅读 · 逻辑（微信读书同步 + 60 分钟打卡 + 连续天数）
+     ========================================================= */
+  function readingToday() {
+    const today = K.dstr();
+    return K.Store.data.reading.logs.filter(l => l.date === today).reduce((s, l) => s + K.num(l.minutes), 0);
+  }
+  function readingDay(date) {
+    return K.Store.data.reading.logs.filter(l => l.date === date).reduce((s, l) => s + K.num(l.minutes), 0);
+  }
+  /* 计算连续打卡天数：当日必须达标，否则 current=0；达标后往前连续累加 */
+  function readingStreak() {
+    const R = K.Store.data.reading, today = K.dstr();
+    if (readingDay(today) < R.dailyMin) return { current: 0, best: Math.max(R.streak.best || 0, 0), checked: 1 };
+    let ds = K.addDays(today, -1), streak = 1;
+    while (true) {
+      const min = readingDay(ds);
+      if (min >= R.dailyMin) { streak++; ds = K.addDays(ds, -1); }
+      else break;
+    }
+    return { current: streak, best: Math.max(R.streak.best || 0, streak), checked: 1 };
+  }
+  /* 检查并刷新连续打卡状态：通常由 runDailyJobs 每日调用一次 */
+  function readingCheck(today) {
+    const R = K.Store.data.reading;
+    if (!R.streak) R.streak = { current: 0, best: 0, lastCheck: '' };
+    if (R.streak.lastCheck === today) return R.streak;
+    const info = readingStreak();
+    R.streak.current = info.current;
+    R.streak.best = info.best;
+    R.streak.lastCheck = today;
+    K.Store.save();
+    return R.streak;
+  }
+  /* 添加一条阅读记录，自动结算连续打卡、已读完书籍（由 progress=100 触发） */
+  function readingAddLog(opt) {
+    const S = K.Store.data, R = S.reading, today = opt.date || K.dstr();
+    const log = { id: K.uid(), date: today, bookId: opt.bookId || '', minutes: K.num(opt.minutes) || 0, page: K.num(opt.page) || 0, quote: opt.quote || '', thought: opt.thought || '', source: opt.source || 'manual', importedAt: opt.importedAt || '' };
+    R.logs.push(log);
+    // 若指定了书籍且页码达到总页数，则移入已读完书单
+    if (log.bookId) {
+      const b = R.books.find(x => x.id === log.bookId);
+      if (b) {
+        b.progress = Math.max(b.progress || 0, Math.min(log.page, b.pages));
+        if (b.progress >= b.pages && b.pages > 0) {
+          const exist = R.finished.find(x => x.bookId === b.id);
+          if (!exist) {
+            const totalMin = R.logs.filter(l => l.bookId === b.id).reduce((s, l) => s + K.num(l.minutes), 0);
+            R.finished.push({ id: K.uid(), bookId: b.id, title: b.title, author: b.author, cover: b.cover || '', finishedAt: today, totalMinutes: totalMin });
+          }
+        }
+      }
+    }
+    readingCheck(today);
+    K.Store.save();
+    return log;
+  }
+  /* 从微信读书同步数据：data = { date, minutes, books:[{bookId,title,author,cover,progress,totalMinutes,finished}] } */
+  function readingSyncFromWeread(data) {
+    const R = K.Store.data.reading, today = data.date || K.dstr();
+    let addedMin = 0;
+    // 按日期写入/合并阅读时长
+    if (K.num(data.minutes) > 0) {
+      const exists = R.logs.filter(l => l.date === today && l.source === 'weread');
+      const existMin = exists.reduce((s, l) => s + K.num(l.minutes), 0);
+      if (data.minutes > existMin) {
+        const delta = data.minutes - existMin;
+        R.logs.push({ id: K.uid(), date: today, bookId: '', minutes: delta, page: 0, quote: '', thought: '', source: 'weread', importedAt: new Date().toISOString() });
+        addedMin += delta;
+      }
+    }
+    // 同步在读书籍进度
+    (data.books || []).forEach(wb => {
+      let b = R.books.find(x => x.bookId === wb.bookId);
+      if (!b) {
+        b = { id: K.uid(), bookId: wb.bookId || '', title: wb.title || '未命名书籍', author: wb.author || '', pages: K.num(wb.pages) || 100, cover: wb.cover || '', progress: 0, at: today };
+        R.books.push(b);
+      }
+      b.progress = Math.max(b.progress || 0, K.num(wb.progress));
+      if (wb.cover) b.cover = wb.cover;
+      if (wb.finished || b.progress >= b.pages) {
+        b.progress = b.pages;
+        const bid = b.bookId || b.id;
+        const exist = R.finished.find(x => x.bookId === bid);
+        if (!exist) {
+          const totalMin = R.logs.filter(l => l.bookId === b.id).reduce((s, l) => s + K.num(l.minutes), 0) + K.num(wb.totalMinutes || 0);
+          R.finished.push({ id: K.uid(), bookId: bid, title: b.title, author: b.author, cover: b.cover, finishedAt: today, totalMinutes: totalMin });
+        }
+      }
+    });
+    readingCheck(today);
+    R.sync.weread = { lastAt: new Date().toISOString(), lastMinutes: readingToday(), status: 'ok', msg: '本次同步新增 ' + addedMin + ' 分钟' };
+    K.Store.save();
+    return addedMin;
+  }
+  /* 今日数据 */
+  function readingReportToday() {
+    const R = K.Store.data.reading, today = K.dstr();
+    const min = readingToday();
+    return { date: today, minutes: min, goal: R.dailyMin, done: min >= R.dailyMin, streak: readingStreak() };
+  }
+  /* 本周汇总（周一到今天） */
+  function readingReportWeek() {
+    const R = K.Store.data.reading, today = K.dstr();
+    const dow = (new Date(today + 'T00:00:00').getDay() + 6) % 7; // 0=周一
+    const mon = K.addDays(today, -dow);
+    const days = [];
+    let total = 0, okDays = 0;
+    for (let i = 0; i < 7; i++) {
+      const ds = K.addDays(mon, i);
+      const min = readingDay(ds);
+      const isFuture = ds > today;
+      if (!isFuture) { total += min; if (min >= R.dailyMin) okDays++; }
+      days.push({ date: ds, day: ['一', '二', '三', '四', '五', '六', '日'][i], minutes: min, done: min >= R.dailyMin, future: isFuture });
+    }
+    return { total, okDays, goalTotal: R.dailyMin * 7, days };
+  }
+  /* 月度报告 */
+  function readingReportMonth(ms) {
+    const R = K.Store.data.reading, month = ms || K.dstr().slice(0, 7);
+    const list = R.logs.filter(l => l.date.slice(0, 7) === month);
+    const total = list.reduce((s, l) => s + K.num(l.minutes), 0);
+    const days = new Set(list.map(l => l.date)).size;
+    const okDays = [];
+    const dim = new Date(parseInt(month.slice(0, 4)), parseInt(month.slice(5, 7)), 0).getDate();
+    for (let d = 1; d <= dim; d++) {
+      const ds = month + '-' + String(d).padStart(2, '0');
+      if (readingDay(ds) >= R.dailyMin) okDays.push(ds);
+    }
+    return { month, total, days, okDays: okDays.length, finished: R.finished.filter(x => (x.finishedAt || '').slice(0, 7) === month).length };
   }
 
   /* =========================================================
@@ -588,6 +729,8 @@
     PET_BREEDS, PET_STAGES, PET_MILESTONES, PET_CFG, PET_TALK, PET_CHEER,
     defaults, ensureTodoDay, runDailyJobs, sleepStreak, wordStreak,
     todoRate, weekTodoRate, savedTotal, monthStat, rankOf, allFunds,
+    readingToday, readingDay, readingStreak, readingCheck, readingAddLog, readingSyncFromWeread,
+    readingReportToday, readingReportWeek, readingReportMonth,
     petData, petCfg, breedOf, petTotalDays, petStage, petNextStage,
     petMilestones, petCur, petLv, petLog, petSync, petDailyFeed
   };
