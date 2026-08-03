@@ -268,7 +268,8 @@
       savings: {
         goal: { annual: 0, monthlyLiving: 0, emergency: 0 },
         records: [],
-        monthMark: {}
+        monthMark: {},
+        customFunds: []   // 用户在专项基金中新增的自定义类目
       },
       sleep: {
         std: { bed: '23:00', focus: '22:40', wake: '07:00', redline: '23:30' },
@@ -406,10 +407,19 @@
   }
   function rankOf(p) { return p >= 90 ? 'S' : p >= 75 ? 'A' : p >= 60 ? 'B' : 'C'; }
 
+  /* ---------- 专项基金：基础 4 个 + 用户自定义类目（编辑/新增后同步生效） ---------- */
+  function allFunds() {
+    const S = K.Store.data;
+    const overrides = (S.savings && S.savings.baseFundOverrides) || {};
+    const custom = (S.savings && S.savings.customFunds) || [];
+    return FUNDS.map(f => ({ id: f.id, name: overrides[f.id] || f.name, icon: f.icon, c: f.c }))
+      .concat(custom.map(f => ({ id: f.id, name: f.name, icon: f.icon || 'i-sparkle', c: f.c || '#B197F0' })));
+  }
+
   w.D = {
     MODULES, ICON_CHOICES, TODO_CATS, PRI, EXP_CATS, INC_CATS, FUNDS, MOODS, QUOTES,
     BOOK_RECS, ARTICLE_RECS, MV_LIST, WMO, hasCN, HOTSPOTS, HEALING,
     defaults, ensureTodoDay, runDailyJobs, sleepStreak, wordStreak,
-    todoRate, weekTodoRate, savedTotal, monthStat, rankOf
+    todoRate, weekTodoRate, savedTotal, monthStat, rankOf, allFunds
   };
 })(window);
