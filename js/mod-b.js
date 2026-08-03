@@ -252,7 +252,10 @@
      模块 6 · 早睡
      ======================================================= */
   Pages.sleep = {
+    view: 'main',   // main | pet
+    ptab: 'home',   // home | bag | book | mile
     render() {
+      if (this.view === 'pet') return this.petRender();
       const S = K.Store.data, SL = S.sleep, today = K.dstr(), ms = K.mstr();
       const t = SL.logs.find(l => l.date === today);
       const streak = D.sleepStreak();
@@ -281,6 +284,29 @@
           : '<div class="hint">今天还没有打卡。记录一次，就多一天看得见的坚持 ✦</div>') +
           '<button class="btn primary full" style="margin-top:10px" id="slLog">' + (t ? '修改今日打卡' : '立即打卡') + '</button>'
       });
+
+      // 云养萌宠入口
+      {
+        const P = SL.pet, cfg = D.petCfg(), ms2 = D.petMilestones();
+        const nx = ms2.find(m => P.done.indexOf(m.id) < 0);
+        const cur = D.petCur(), br = cur ? D.breedOf(cur.breed) : null;
+        h += UI.card({
+          icon: 'i-heart', title: '云养萌宠家园', cls: 'tex-knit',
+          extra: '<button class="btn xs primary" id="slPet">进入家园 🐾</button>',
+          body: (P.init && cur ?
+            '<div class="pet-entry">' +
+            '<div class="pet-ava" style="background:' + (br.tone || '#FFE9F4') + '">' +
+            '<img src="' + br.imgs[D.petStage().i] + '" alt="' + esc(cur.name) + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' +
+            '</div>' +
+            '<div class="pet-entry-x">' +
+            '<div class="pet-entry-n">' + esc(cur.name) + ' <span class="pet-entry-b">' + esc(br.name) + '</span></div>' +
+            '<div class="hint">' + D.petStage().name + ' · 累计早睡 ' + D.petTotalDays() + ' 天 · 饲料 ' + P.feed + ' 袋</div>' +
+            '<div style="margin-top:6px">' + UI.bar(nx ? K.pct(Math.min(streak, nx.day), nx.day) : 100, streak >= (nx ? nx.day : 0) ? 'ok' : '') + '</div>' +
+            '<div class="hint" style="margin-top:4px">' + (nx ? '再连续早睡 <b>' + Math.max(0, nx.day - streak) + '</b> 天解锁「' + esc(nx.name) + '」' : '本轮里程碑已全部达成 🏆') + '</div>' +
+            '</div></div>'
+            : '<div class="hint">还没有领养宠物。每日早睡打卡即可领取饲料，连续早睡解锁装扮、场景与新品种 —— 先去挑一只属于你的真实猫狗吧 🐾</div>')
+        });
+      }
 
       h += UI.card({
         icon: 'i-fire', title: '连续早睡', extra: '连续 ' + streak + ' 天',
@@ -328,9 +354,11 @@
     },
     stateTag(s) { return s === 'good' ? UI.tag('早睡达标 ✓', 'mint') : s === 'late' ? UI.tag('熬夜红线', 'bad') : UI.tag('一般', 'warn'); },
     mount(root, App) {
+      if (this.view === 'pet') return this.petMount(root, App);
       const S = K.Store.data;
       const a = $('#slLog', root); if (a) a.addEventListener('click', () => this.log(App));
       const b = $('#slStd', root); if (b) b.addEventListener('click', () => this.std(App));
+      const p = $('#slPet', root); if (p) p.addEventListener('click', () => { this.view = 'pet'; this.ptab = 'home'; App.render(true); });
       $$('[data-ds]', root).forEach(x => x.addEventListener('click', () => {
         S.sleep.logs = S.sleep.logs.filter(l => l.date !== x.dataset.ds); K.Store.save(); App.render();
       }));
@@ -387,8 +415,383 @@
             SL.rewards.mvUnlocked = true; SL.rewards.lastUnlock = K.dstr(); K.Store.save();
             K.Toast('🎉 连续 7 天早睡，泰勒高清 MV 合集已解锁！', 3500);
           }
+          // 云养萌宠：自动发饲料 + 结算里程碑 + 触发庆祝动态
+          if (SL.pet.init && v.date === today) {
+            const fed = D.petDailyFeed(state);
+            const got = D.petSync();
+            const cur = D.petCur();
+            if (cur && (fed > 0 || got.length)) this.petCheer(cur, fed, got);
+          }
           D.runDailyJobs();
           App.render();
+        }
+      });
+    },
+
+    /* =====================================================
+       云养萌宠 · 家园（写实真实猫狗）
+       ===================================================== */
+    mById(id) { return D.petMilestones().find(m => m.id === id) || null; },
+    petImg(src, alt, cls) {
+      return '<img class="' + (cls || '') + '" src="' + src + '" alt="' + esc(alt || '') + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.style.display=\'none\';this.parentNode.classList.add(\'noimg\')">';
+    },
+
+    petRender() {
+      const P = K.Store.data.sleep.pet;
+      let h = '<div class="pet-top">' +
+        '<button class="btn xs ghost" id="petBack">← 返回早睡</button>' +
+        '<div class="pet-top-t">云养萌宠家园</div>' +
+        '<div class="pet-chip">🍖 ' + P.feed + '</div></div>';
+      if (!P.init) return h + this.petAdopt();
+      h += '<div class="pet-tabs">' +
+        [['home', '家园'], ['bag', '装扮仓库'], ['book', '宠物图鉴'], ['mile', '里程碑']]
+          .map(t => '<button class="pet-tab' + (this.ptab === t[0] ? ' on' : '') + '" data-ptab="' + t[0] + '">' + t[1] + '</button>').join('') +
+        '</div>';
+      h += this.ptab === 'bag' ? this.petBag() : this.ptab === 'book' ? this.petBook() : this.ptab === 'mile' ? this.petMile() : this.petHome();
+      return h;
+    },
+
+    /* ---------- 领养引导 ---------- */
+    petAdopt() {
+      const cfg = D.petCfg();
+      return UI.card({
+        icon: 'i-heart', title: '领养属于你的第一只宠物', cls: 'tex-knit',
+        body: '<div class="hint">全部为真实猫狗实拍照片。挑一只你一眼心动的，给它取个名字 —— 之后每天早睡打卡都会给它带回饲料，连续早睡还能解锁配饰、场景与新品种。完整走完一轮 ' + cfg.len + ' 天，可再领养一只新品种。</div>' +
+          '<div class="pet-grid" style="margin-top:12px">' +
+          D.PET_BREEDS.map(b =>
+            '<button class="pet-cell" data-pick="' + b.id + '">' +
+            '<div class="pet-cell-img" style="background:' + b.tone + '">' + this.petImg(b.imgs[1], b.name) + '</div>' +
+            '<div class="pet-cell-n">' + esc(b.name) + '</div>' +
+            '<div class="pet-cell-s">' + (b.kind === 'cat' ? '🐱 ' : '🐶 ') + esc(b.tag) + '</div>' +
+            '</button>').join('') + '</div>'
+      });
+    },
+
+    /* ---------- 家园 ---------- */
+    petHome() {
+      const S = K.Store.data, P = S.sleep.pet, cur = D.petCur();
+      if (!cur) return UI.empty('还没有宠物', 'i-heart');
+      const br = D.breedOf(cur.breed);
+      const total = D.petTotalDays(), st = D.petStage(total), nx = D.petNextStage(total);
+      const lv = D.petLv(cur.id), dr = P.dress[cur.id] || {}, streak = D.sleepStreak(), cfg = D.petCfg();
+      const scene = dr.scene ? this.mById(dr.scene) : null;
+      const acc = dr.acc ? this.mById(dr.acc) : null;
+      const toy = dr.toy ? this.mById(dr.toy) : null;
+      const outfit = dr.outfit ? this.mById(dr.outfit) : null;
+      const hasLight = P.bag.fx.indexOf('fx_light') >= 0 && dr.fx === 'fx_light';
+      const hasIdle = P.done.indexOf('scene_autumn') >= 0 || P.bag.scene.indexOf('scene_autumn') >= 0;
+      const rare = P.bag.rare.length > 0;
+      const bg = scene && scene.bg ? scene.bg : 'linear-gradient(160deg,#FFF6FA,#F1EAFF 58%,#E8F4FF)';
+      const filter = (outfit && outfit.filter) || (rare ? 'saturate(1.1)' : '');
+      let h = '';
+
+      /* 舞台 */
+      h += '<section class="card pet-stage-card">' +
+        '<div class="pet-stage" id="petStage" style="background:' + bg + '">' +
+        (hasLight ? '<div class="pet-light"></div>' : '') +
+        '<div class="pet-photo' + (hasIdle ? ' idle' : '') + '" id="petPhoto"' + (filter ? ' style="filter:' + filter + '"' : '') + '>' +
+        this.petImg(br.imgs[st.i], cur.name) + '</div>' +
+        (acc ? '<div class="pet-sticker acc">' + acc.emo + '</div>' : '') +
+        (toy ? '<div class="pet-sticker toy">' + toy.emo + '</div>' : '') +
+        (rare ? '<div class="pet-sticker rare">👑</div>' : '') +
+        '<div class="pet-nametag">' + esc(cur.name) + ' <i>' + esc(br.name) + '</i></div>' +
+        '<div class="pet-hint-tip">轻点它 · 打个招呼</div>' +
+        '<div class="pet-fxlayer" id="petFx"></div>' +
+        '</div>' +
+        '<div class="pet-acts">' +
+        '<button class="btn primary" id="petFeedBtn">🍖 喂它一口（饲料 ' + P.feed + '）</button>' +
+        '<button class="btn soft" id="petRename">改名</button>' +
+        '</div>' +
+        '</section>';
+
+      /* 成长形态 */
+      h += UI.card({
+        icon: 'i-sparkle', title: '成长形态', extra: st.name,
+        body: '<div class="hint" style="margin-bottom:8px">' + esc(st.desc) + '</div>' +
+          '<div class="prow"><span>累计早睡打卡</span><b>' + total + ' 天</b></div>' +
+          UI.bar(nx ? K.pct(total, nx.need) : 100, nx ? '' : 'ok') +
+          '<div class="hint" style="margin-top:6px">' + (nx ? '再累计 <b>' + (nx.need - total) + '</b> 天早睡，进化为「' + nx.name + '」' : '已是成年完全体，它是你 ' + total + ' 天早睡的证明 🏆') + '</div>' +
+          '<div class="pet-stages">' + D.PET_STAGES.map(s =>
+            '<div class="pet-sg' + (total >= s.need ? ' on' : '') + '"><b>' + s.need + '天</b><span>' + s.name + '</span></div>').join('') + '</div>' +
+          '<div class="hint" style="margin-top:8px">成长形态只看累计打卡，断签不会退化 ✦</div>'
+      });
+
+      /* 饲料 & 成长值 */
+      h += UI.card({
+        icon: 'i-gem', title: '饲料与成长值', extra: 'Lv.' + lv.lv,
+        body: '<div class="grid g3">' +
+          UI.stat(P.feed, '饲料库存', 'sm') + UI.stat(lv.g, '成长值', 'sm') + UI.stat(streak, '连续早睡', 'sm') + '</div>' +
+          '<div style="margin-top:10px"><div class="prow"><span>距离 Lv.' + (lv.lv + 1) + '</span><b>' + lv.cur + '/' + lv.need + '</b></div>' + UI.bar(K.pct(lv.cur, lv.need)) + '</div>' +
+          '<div class="hint" style="margin-top:8px">每日早睡达标自动领取 ' + cfg.feedGood + ' 袋饲料（一般睡眠 ' + cfg.feedMid + ' 袋）；喂食 1 袋 = 成长值 +' + cfg.growthPerFeed + '。</div>'
+      });
+
+      /* 我的宠物 */
+      h += UI.card({
+        icon: 'i-heart', title: '我的宠物', extra: P.list.length + ' 只 · 领养券 ' + P.tickets,
+        body: '<div class="pet-row">' + P.list.map(p => {
+          const b = D.breedOf(p.breed);
+          return '<button class="pet-mini' + (p.id === cur.id ? ' on' : '') + '" data-switch="' + p.id + '">' +
+            '<div class="pet-mini-img" style="background:' + b.tone + '">' + this.petImg(b.imgs[D.petStage().i], p.name) + '</div>' +
+            '<div class="pet-mini-n">' + esc(p.name) + '</div></button>';
+        }).join('') +
+          (P.tickets > 0 ? '<button class="pet-mini add" data-ptab="book"><div class="pet-mini-img plus">＋</div><div class="pet-mini-n">领养</div></button>' : '') +
+          '</div>' +
+          '<div class="hint" style="margin-top:8px">点头像切换当前饲养的宠物；每完成一轮 ' + cfg.len + ' 天周期获得 1 张领养券。</div>'
+      });
+
+      /* 动态 */
+      h += UI.card({
+        icon: 'i-news', title: '家园动态', cls: 'tex-news',
+        body: P.log.length ? P.log.slice(0, 10).map(l =>
+          '<div class="li"><div class="li-main"><div class="li-t">' + esc(l.x) + '</div><div class="li-s">' + esc(l.t) + '</div></div></div>').join('')
+          : UI.empty('还没有动态，去打卡吧', 'i-moon')
+      });
+      return h;
+    },
+
+    /* ---------- 装扮仓库 ---------- */
+    petBag() {
+      const P = K.Store.data.sleep.pet, cur = D.petCur();
+      if (!cur) return UI.empty('还没有宠物', 'i-heart');
+      const dr = P.dress[cur.id] || {}, ms = D.petMilestones(), streak = D.sleepStreak();
+      const groups = [
+        { k: 'acc', t: '配饰', ico: 'i-bow' }, { k: 'outfit', t: '写实穿搭', ico: 'i-sweater' },
+        { k: 'scene', t: '家园场景', ico: 'i-leaf' }, { k: 'toy', t: '玩具道具', ico: 'i-star' },
+        { k: 'fx', t: '互动 / 光影特效', ico: 'i-sparkle' }
+      ];
+      let h = '<div class="hint" style="margin:0 0 10px;padding:0 4px">给「' + esc(cur.name) + '」自由搭配。已解锁的道具永久保留，断签也不会回收 ✦</div>';
+      groups.forEach(g => {
+        const items = ms.filter(m => m.type === g.k);
+        h += UI.card({
+          icon: g.ico, title: g.t,
+          body: '<div class="pet-items">' + items.map(m => {
+            const own = P.bag[g.k].indexOf(m.id) >= 0;
+            const on = dr[g.k] === m.id;
+            return '<button class="pet-item' + (own ? '' : ' lock') + (on ? ' on' : '') + '"' + (own ? ' data-equip="' + g.k + ':' + m.id + '"' : '') + '>' +
+              '<div class="pet-item-e">' + (own ? m.emo : '🔒') + '</div>' +
+              '<div class="pet-item-n">' + esc(m.name.replace(/^[^·]+·\s*/, '')) + '</div>' +
+              '<div class="pet-item-s">' + (own ? (on ? '已装备' : '点击装备') : '连续 ' + m.day + ' 天解锁（差 ' + Math.max(0, m.day - streak) + ' 天）') + '</div>' +
+              '</button>';
+          }).join('') +
+            (items.some(m => P.bag[g.k].indexOf(m.id) >= 0 && dr[g.k] === m.id) ?
+              '<button class="pet-item off" data-equip="' + g.k + ':"><div class="pet-item-e">✕</div><div class="pet-item-n">卸下</div><div class="pet-item-s">恢复原样</div></button>' : '') +
+            '</div>'
+        });
+      });
+      /* 稀有 & 勋章 */
+      h += UI.card({
+        icon: 'i-crown', title: '稀有套装与纪念勋章',
+        body: (P.bag.rare.length || P.bag.medal.length) ?
+          '<div class="pet-items">' +
+          P.bag.rare.map(id => { const m = this.mById(id) || { emo: '👑', name: '稀有主题套装' }; return '<div class="pet-item on"><div class="pet-item-e">' + m.emo + '</div><div class="pet-item-n">' + esc(m.name) + '</div><div class="pet-item-s">已永久生效</div></div>'; }).join('') +
+          P.bag.medal.map((id, i) => '<div class="pet-item on"><div class="pet-item-e">🎖️</div><div class="pet-item-n">第 ' + (i + 1) + ' 轮纪念勋章</div><div class="pet-item-s">' + D.petCfg().len + ' 天通关</div></div>').join('') +
+          '</div>'
+          : '<div class="hint">连续早睡满 ' + (D.petMilestones().slice(-1)[0] || { day: 90 }).day + ' 天，可获得稀有主题套装与专属电子纪念勋章。</div>'
+      });
+      return h;
+    },
+
+    /* ---------- 宠物图鉴 ---------- */
+    petBook() {
+      const P = K.Store.data.sleep.pet;
+      const owned = {}; P.list.forEach(p => owned[p.breed] = p);
+      const n = Object.keys(owned).length;
+      return UI.card({
+        icon: 'i-book', title: '宠物图鉴', extra: n + '/' + D.PET_BREEDS.length + ' 已领养',
+        body: '<div class="hint">全部为真实猫狗实拍素材。未解锁品种以灰度预览，完成一轮 ' + D.petCfg().len + ' 天周期即可获得领养资格。当前领养券：<b>' + P.tickets + '</b> 张</div>' +
+          '<div class="pet-grid" style="margin-top:12px">' + D.PET_BREEDS.map(b => {
+            const has = !!owned[b.id], can = !has && P.tickets > 0;
+            return '<button class="pet-cell' + (has ? ' owned' : can ? ' can' : ' lock') + '"' + (can ? ' data-adopt="' + b.id + '"' : '') + '>' +
+              '<div class="pet-cell-img" style="background:' + b.tone + '">' + this.petImg(b.imgs[5] || b.imgs[0], b.name) + '</div>' +
+              '<div class="pet-cell-n">' + esc(b.name) + '</div>' +
+              '<div class="pet-cell-s">' + (has ? '已领养 · ' + esc(owned[b.id].name) : can ? '可领养（消耗 1 券）' : '🔒 待解锁') + '</div>' +
+              '</button>';
+          }).join('') + '</div>'
+      });
+    },
+
+    /* ---------- 里程碑 ---------- */
+    petMile() {
+      const P = K.Store.data.sleep.pet, cfg = D.petCfg(), ms = D.petMilestones(), streak = D.sleepStreak();
+      const doneN = ms.filter(m => P.done.indexOf(m.id) >= 0).length;
+      let h = UI.card({
+        icon: 'i-fire', title: '本轮周期', extra: '第 ' + P.cycle.round + ' 轮',
+        body: '<div class="grid g3">' + UI.stat(streak, '连续早睡', 'sm') + UI.stat(doneN + '/' + ms.length, '已达成', 'sm') + UI.stat(cfg.len + ' 天', '周期长度', 'sm') + '</div>' +
+          '<div style="margin-top:10px">' + UI.bar(K.pct(Math.min(streak, cfg.len), cfg.len), streak >= cfg.len ? 'ok' : '') + '</div>' +
+          '<div class="hint" style="margin-top:8px">⚠️ 当天未早睡达标，<b>连续天数清零</b>；但已解锁的宠物、外观、场景、道具<b>永久保留</b>，宠物不会退化。</div>' +
+          '<button class="btn xs ghost full" style="margin-top:10px" id="petCfgBtn">⚙︎ 周期与奖励配置（后台）</button>'
+      });
+      h += UI.card({
+        icon: 'i-star', title: '连续早睡阶梯里程碑',
+        body: '<div class="pet-line">' + ms.map(m => {
+          const done = P.done.indexOf(m.id) >= 0;
+          const cur = !done && streak < m.day;
+          return '<div class="pet-node' + (done ? ' done' : '') + '">' +
+            '<div class="pet-node-d">' + m.day + '<i>天</i></div>' +
+            '<div class="pet-node-b">' +
+            '<div class="pet-node-t">' + m.emo + ' ' + esc(m.name) + (done ? ' <span class="tag mint">已解锁</span>' : '') + '</div>' +
+            '<div class="pet-node-s">' + esc(m.desc) + '</div>' +
+            (cur ? '<div class="pet-node-p">' + UI.bar(K.pct(streak, m.day)) + '<span>还差 ' + (m.day - streak) + ' 天</span></div>' : '') +
+            '</div>' +
+            '<button class="mini-btn" data-medit="' + m.id + '">✎</button>' +
+            '</div>';
+        }).join('') + '</div>' +
+          '<div class="hint" style="margin-top:8px">走完全部里程碑并达到 ' + cfg.len + ' 天，解锁新品种领养资格，周期自动进入下一轮。</div>'
+      });
+      return h;
+    },
+
+    /* ---------- 交互挂载 ---------- */
+    petMount(root, App) {
+      const S = K.Store.data, P = S.sleep.pet, self = this;
+      const bk = $('#petBack', root); if (bk) bk.addEventListener('click', () => { this.view = 'main'; App.render(true); });
+      $$('[data-ptab]', root).forEach(b => b.addEventListener('click', () => { this.ptab = b.dataset.ptab; App.render(true); }));
+      $$('[data-pick]', root).forEach(b => b.addEventListener('click', () => this.petAdoptDo(b.dataset.pick, App, true)));
+      $$('[data-adopt]', root).forEach(b => b.addEventListener('click', () => this.petAdoptDo(b.dataset.adopt, App, false)));
+      $$('[data-switch]', root).forEach(b => b.addEventListener('click', () => {
+        P.cur = b.dataset.switch; K.Store.save(); App.render();
+      }));
+      $$('[data-equip]', root).forEach(b => b.addEventListener('click', () => {
+        const cur = D.petCur(); if (!cur) return;
+        const p = b.dataset.equip.split(':'), k = p[0], id = p[1] || '';
+        P.dress[cur.id] = P.dress[cur.id] || {};
+        P.dress[cur.id][k] = P.dress[cur.id][k] === id ? '' : id;
+        K.Store.save(); K.Toast(id ? '已装备' : '已卸下'); App.render();
+      }));
+      $$('[data-medit]', root).forEach(b => b.addEventListener('click', () => this.petEditMs(b.dataset.medit, App)));
+      const cf = $('#petCfgBtn', root); if (cf) cf.addEventListener('click', () => this.petCfgForm(App));
+      const rn = $('#petRename', root); if (rn) rn.addEventListener('click', () => this.petRenameForm(App));
+      const fb = $('#petFeedBtn', root); if (fb) fb.addEventListener('click', () => this.petFeed(App));
+      const ph = $('#petPhoto', root); if (ph) ph.addEventListener('click', () => this.petTouch(root));
+    },
+
+    petAdoptDo(breedId, App, first) {
+      const P = K.Store.data.sleep.pet, b = D.breedOf(breedId);
+      if (!first && P.tickets <= 0) { K.Toast('还没有领养资格券'); return; }
+      K.Sheet.form({
+        title: '领养 · ' + b.name,
+        fields: [
+          { k: 'note', type: 'note', label: '真实实拍素材 · ' + b.tag + '。取个只属于你们的名字吧。' },
+          { k: 'name', label: '宠物昵称', required: true, value: '', placeholder: '如：糯米 / 布丁 / 小满' }
+        ],
+        submitText: '确认领养',
+        onSubmit: v => {
+          const id = K.uid();
+          P.list.push({ id: id, breed: breedId, name: String(v.name).slice(0, 12), adoptedAt: K.dstr(), round: P.cycle.round });
+          P.cur = id; P.growth[id] = 0; P.dress[id] = {};
+          if (first) { P.init = true; P.cycle.start = K.dstr(); P.tickets = Math.max(0, P.tickets - 1); }
+          else P.tickets -= 1;
+          D.petLog('领养了' + b.name + '「' + v.name + '」');
+          K.Store.save();
+          D.petSync();
+          K.Toast('🎉 ' + v.name + ' 来到你的家园啦！', 3000);
+          this.ptab = 'home'; App.render(true);
+        }
+      });
+    },
+    petRenameForm(App) {
+      const cur = D.petCur(); if (!cur) return;
+      K.Sheet.form({
+        title: '修改昵称',
+        fields: [{ k: 'name', label: '宠物昵称', required: true, value: cur.name }],
+        onSubmit: v => { cur.name = String(v.name).slice(0, 12); K.Store.save(); K.Toast('已改名'); App.render(); }
+      });
+    },
+    petFeed(App) {
+      const P = K.Store.data.sleep.pet, cur = D.petCur(), cfg = D.petCfg();
+      if (!cur) return;
+      if (P.feed <= 0) { K.Toast('饲料不够啦，今晚早睡打卡就能领取 🍖'); return; }
+      P.feed -= 1;
+      const before = D.petLv(cur.id).lv;
+      P.growth[cur.id] = K.num(P.growth[cur.id] || 0) + K.num(cfg.growthPerFeed);
+      const after = D.petLv(cur.id).lv;
+      D.petLog('喂食 1 袋，成长值 +' + cfg.growthPerFeed);
+      K.Store.save();
+      const st = $('#petStage'); if (st) this.petBurst(st, ['🍖', '💛', '✨']);
+      K.Toast(after > before ? '🎉 ' + cur.name + ' 升到 Lv.' + after + ' 了！' : cur.name + ' 吃得很香，成长值 +' + cfg.growthPerFeed);
+      setTimeout(() => App.render(), 420);
+    },
+    petTouch(root) {
+      const P = K.Store.data.sleep.pet, cur = D.petCur(); if (!cur) return;
+      const dr = P.dress[cur.id] || {};
+      const ph = $('#petPhoto', root); if (ph) { ph.classList.remove('pop'); void ph.offsetWidth; ph.classList.add('pop'); }
+      const st = $('#petStage', root);
+      const emo = dr.fx === 'fx_heart' ? ['💗', '💗', '💖'] : dr.fx === 'fx_light' ? ['✨', '🌟', '✨'] : ['🐾', '✨'];
+      if (st) this.petBurst(st, emo);
+      K.Toast(cur.name + '：' + K.pick(D.PET_TALK));
+    },
+    petBurst(stage, emos) {
+      const layer = stage.querySelector('.pet-fxlayer'); if (!layer) return;
+      for (let i = 0; i < 7; i++) {
+        const s = document.createElement('span');
+        s.className = 'pet-pt';
+        s.textContent = emos[i % emos.length];
+        s.style.left = (18 + Math.random() * 64) + '%';
+        s.style.animationDelay = (i * 60) + 'ms';
+        s.style.fontSize = (14 + Math.random() * 12) + 'px';
+        layer.appendChild(s);
+        setTimeout(() => { if (s.parentNode) s.parentNode.removeChild(s); }, 1500 + i * 60);
+      }
+    },
+    /* 打卡成功 · 庆祝动态 */
+    petCheer(cur, fed, got) {
+      const br = D.breedOf(cur.breed);
+      const el = document.createElement('div');
+      el.className = 'pet-cheer';
+      el.innerHTML = '<div class="pet-cheer-box">' +
+        '<div class="pet-cheer-img">' + this.petImg(br.imgs[4] || br.imgs[0], cur.name) + '</div>' +
+        '<div class="pet-cheer-t">' + esc(K.pick(D.PET_CHEER)) + '</div>' +
+        '<div class="pet-cheer-s">' + esc(cur.name) + ' 领到了 ' + fed + ' 袋饲料</div>' +
+        (got && got.length ? '<div class="pet-cheer-g">' + got.map(m => '<span>' + (m.emo || '🎁') + ' ' + esc(m.name) + '</span>').join('') + '</div>' : '') +
+        '<div class="pet-cheer-p">' + ['💗', '✨', '🐾', '💛', '✨', '💗'].map((e, i) =>
+          '<i style="left:' + (10 + i * 15) + '%;animation-delay:' + (i * 110) + 'ms">' + e + '</i>').join('') + '</div>' +
+        '</div>';
+      document.body.appendChild(el);
+      requestAnimationFrame(() => el.classList.add('show'));
+      const close = () => { el.classList.remove('show'); setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 300); };
+      el.addEventListener('click', close);
+      setTimeout(close, got && got.length ? 4200 : 2800);
+    },
+    /* 后台：周期与奖励配置 */
+    petCfgForm(App) {
+      const P = K.Store.data.sleep.pet, cfg = D.petCfg();
+      K.Sheet.form({
+        title: '周期与奖励配置',
+        fields: [
+          { k: 'note', type: 'note', label: '默认一轮 90 天。修改后立即生效，已解锁奖励不受影响。' },
+          { k: 'len', label: '周期长度（天）', type: 'number', value: cfg.len },
+          { k: 'days', label: '9 档里程碑天数（英文逗号分隔）', value: cfg.days.join(','), placeholder: '3,7,14,21,30,45,60,75,90' },
+          { k: 'feedGood', label: '早睡达标每日饲料（袋）', type: 'number', value: cfg.feedGood },
+          { k: 'feedMid', label: '一般睡眠每日饲料（袋）', type: 'number', value: cfg.feedMid },
+          { k: 'growthPerFeed', label: '每袋饲料成长值', type: 'number', value: cfg.growthPerFeed },
+          { k: 'lvUp', label: '升 1 级所需成长值', type: 'number', value: cfg.lvUp }
+        ],
+        submitText: '保存配置',
+        onSubmit: v => {
+          const ds = String(v.days).split(/[,，\s]+/).map(x => K.num(x)).filter(x => x > 0);
+          P.cfg = {
+            len: Math.max(7, K.num(v.len) || 90),
+            days: ds.length ? ds : cfg.days,
+            feedGood: Math.max(0, K.num(v.feedGood)), feedMid: Math.max(0, K.num(v.feedMid)),
+            growthPerFeed: Math.max(1, K.num(v.growthPerFeed)), lvUp: Math.max(10, K.num(v.lvUp))
+          };
+          K.Store.save(); D.petSync(); K.Toast('配置已更新'); App.render();
+        }
+      });
+    },
+    petEditMs(id, App) {
+      const P = K.Store.data.sleep.pet, m = this.mById(id); if (!m) return;
+      K.Sheet.form({
+        title: '编辑第 ' + m.day + ' 天奖励',
+        fields: [
+          { k: 'name', label: '奖励名称', value: m.name, required: true },
+          { k: 'desc', label: '奖励说明', type: 'textarea', value: m.desc }
+        ],
+        submitText: '保存',
+        onSubmit: v => {
+          P.nameOv = P.nameOv || {};
+          P.nameOv[id] = { name: v.name, desc: v.desc };
+          K.Store.save(); K.Toast('已更新'); App.render();
         }
       });
     }
