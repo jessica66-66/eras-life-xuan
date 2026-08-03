@@ -1,4 +1,4 @@
-/* Eras Life·璇 — Service Worker (v33)
+/* Eras Life·璇 — Service Worker (v34)
  * 自我注销型：安装后立刻清除所有可能残留的站点缓存并注销自己，
  * 之后页面完全依赖网络请求（index.html 已设置 no-cache），杜绝旧版本缓存导致的「刷新无效 / B站iframe」等僵局。
  * fetch 一律走网络，离线时再回退缓存（仅兜底，不主动缓存 HTML）。
