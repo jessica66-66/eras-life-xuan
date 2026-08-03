@@ -133,27 +133,8 @@
     },
 
     syncSectionHTML(S) {
-      const c = S.settings.sync;
-      const st = c.status === 'ok' ? ('已同步' + (c.lastSync ? ' · ' + c.lastSync : '')) : (c.status === 'error' ? '同步出错' : (c.status === 'offline' ? '离线待同步' : (c.enabled ? '同步中…' : '未开启')));
-      const jsonbin = '<div id="syncJsonbin">' +
-        '<div class="fld"><div class="fld-l">Bin ID</div><input class="inp" id="stBin" placeholder="JSONBin 的 Bin ID" value="' + esc(c.bin || '') + '"></div>' +
-        '<div class="fld"><div class="fld-l">API Key（X-Master-Key）</div><input class="inp" id="stKey" type="password" placeholder="JSONBin 的密钥" value="' + esc(c.key || '') + '"></div>' +
-        '<div class="fld-h">在 jsonbin.io 免费注册后新建一个 Bin，把 Bin ID 与 API Key 填到这里即可。</div></div>';
-      const custom = '<div id="syncCustom" style="display:none">' +
-        '<div class="fld"><div class="fld-l">同步地址（GET/PUT 完整 URL）</div><input class="inp" id="stUrl" placeholder="https://your-server/api/eras" value="' + esc(c.url || '') + '"></div>' +
-        '<div class="fld"><div class="fld-l">请求头（JSON，可选）</div><textarea class="inp" id="stHeaders" placeholder=\'{"Authorization":"Bearer xxx"}\'>' + esc(c.headers || '') + '</textarea></div>' +
-        '<div class="fld-h">任意返回/接收 JSON 的 REST 接口均可（含自建服务器）。</div></div>';
       return '<div class="fld"><div class="fld-l">云端同步</div>' +
-        '<div class="sw-row"><div class="fld-l" style="margin:0">开启多端同步</div><div class="sw' + (c.enabled ? ' on' : '') + '" id="stSyncOn"><i></i></div></div>' +
-        '<div class="fld" style="margin-top:10px"><div class="fld-l">服务类型</div>' +
-        '<select class="inp" id="stSyncMode">' +
-        '<option value="jsonbin"' + (c.mode === 'jsonbin' ? ' selected' : '') + '>JSONBin（免服务器）</option>' +
-        '<option value="custom"' + (c.mode === 'custom' ? ' selected' : '') + '>自定义 / 自建服务器</option>' +
-        '</select></div>' +
-        jsonbin + custom +
-        '<div class="btn-row"><button class="btn sm soft" id="stTest">测试连接</button><button class="btn sm primary" id="stNow">立即同步</button></div>' +
-        '<div class="btn-row"><button class="btn sm ghost" id="stPush">强制上传</button><button class="btn sm ghost" id="stPull">强制下载</button></div>' +
-        '<div class="fld-h" id="stSyncStatus">状态：' + st + '</div></div>';
+        '<div class="hint">已改用 GitHub 同源方案：阅读数据由每天 23:30 的自动任务写入仓库 data.json，无需 JSONBin 或额外密钥。本机数据仍可通过下方「导出备份 / 导入恢复」手动迁移。</div></div>';
     },
 
     /* ---------- 设置 ---------- */
@@ -212,39 +193,6 @@
             inp.click();
           });
           $('#stIcons', a.el).addEventListener('click', () => { a.close(); App.iconManager(); });
-
-          // 云端同步
-          const Sync = w.Sync;
-          const c = S.settings.sync;
-          const setStatus = (t) => { const el = $('#stSyncStatus', a.el); if (el) el.textContent = '状态：' + t; };
-          const readCfg = () => {
-            c.enabled = $('#stSyncOn', a.el).classList.contains('on');
-            c.mode = $('#stSyncMode', a.el).value;
-            c.bin = $('#stBin', a.el).value.trim();
-            c.key = $('#stKey', a.el).value.trim();
-            c.url = $('#stUrl', a.el).value.trim();
-            c.headers = $('#stHeaders', a.el).value.trim();
-            K.Store.save();
-          };
-          $('#stSyncOn', a.el).addEventListener('click', function () {
-            this.classList.toggle('on'); readCfg();
-          });
-          Sync.setStatus(c.status);
-          const toggleMode = () => {
-            const m = $('#stSyncMode', a.el).value;
-            $('#syncJsonbin', a.el).style.display = m === 'jsonbin' ? '' : 'none';
-            $('#syncCustom', a.el).style.display = m === 'custom' ? '' : 'none';
-          };
-          $('#stSyncMode', a.el).addEventListener('change', function () { toggleMode(); readCfg(); });
-          $('#stTest', a.el).addEventListener('click', async () => {
-            readCfg();
-            if (!c.enabled) { K.Toast('请先开启同步'); return; }
-            try { const r = await Sync.test(); setStatus(r.ok ? ('连接正常' + (r.hasData ? '，云端已有数据' : '，云端为空')) : '连接失败'); K.Toast('连接正常 ✦'); }
-            catch (e) { setStatus('连接失败：' + (e.message || e)); K.Toast('连接失败：' + (e.message || e)); }
-          });
-          $('#stNow', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } if (Sync.syncing) { K.Toast('同步已在进行中，请稍候'); return; } Sync.once(); });
-          $('#stPush', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } if (Sync.syncing) { K.Toast('同步已在进行中，请稍候'); return; } Sync.forcePush(); });
-          $('#stPull', a.el).addEventListener('click', () => { readCfg(); if (!c.enabled) { K.Toast('请先开启同步'); return; } if (Sync.syncing) { K.Toast('同步已在进行中，请稍候'); return; } Sync.forcePull(); });
 
           $('#stReset', a.el).addEventListener('click', () => {
             K.Sheet.confirm('清空全部数据', '此操作不可恢复，将删除所有打卡、记账、阅读与复盘记录。建议先导出备份。', () => {
@@ -375,7 +323,7 @@
       try {
       K.Store.load(D.defaults());
       K.injectIcons();
-      if (w.Sync) w.Sync.init();
+      // 旧 JSONBin/自定义云端同步已废弃，不再初始化；阅读数据走 GitHub 同源 data.json
       D.runDailyJobs();
 
       // 星光闪片
@@ -389,7 +337,6 @@
       $('#btnMenu').addEventListener('click', () => this.openDrawer());
       $('#scrim').addEventListener('click', () => this.closeDrawer());
       $('#btnSettings').addEventListener('click', () => this.settings());
-      $('#btnSync').addEventListener('click', () => { if (w.Sync) w.Sync.manual(); });
       $('#btnAddModule').addEventListener('click', () => { this.closeDrawer(); setTimeout(() => this.addModule(), 260); });
       $('#btnDelModule').addEventListener('click', () => { this.closeDrawer(); setTimeout(() => this.delModule(), 260); });
       const sm = $('#btnSortMode');
