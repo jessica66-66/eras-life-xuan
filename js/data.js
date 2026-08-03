@@ -414,6 +414,8 @@
     }
     // 云养萌宠：补结算里程碑（断签不回收，已解锁永久保留）
     if (S.sleep.pet && S.sleep.pet.init) petSync();
+    // 阅读打卡：旧默认 30 分钟迁移到 60 分钟
+    if (S.reading && S.reading.dailyMin === 30) S.reading.dailyMin = 60;
     // 阅读打卡：刷新连续天数（未达标自动清零）
     readingCheck(today);
     S.meta.lastRun = today;
