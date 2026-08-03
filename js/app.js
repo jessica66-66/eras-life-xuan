@@ -54,19 +54,14 @@
       list.innerHTML = this.modules().map(m =>
         '<div class="nav-item' + (m.id === this.cur ? ' active' : '') + '" data-sort-id="' + m.id + '" data-id="' + m.id + '"' + (m.custom ? ' data-custom="1"' : '') + '>' +
         '<div class="nav-handle drag-handle">' + ico('i-drag') + '</div>' +
-        '<div class="nav-ico" data-ic-mid="' + m.id + '" title="点击更换图标">' + ico(m.icon || 'i-sparkle') + '</div>' +
+        '<div class="nav-ico">' + ico(m.icon || 'i-sparkle') + '</div>' +
         '<div class="nav-txt"><div class="nav-name">' + esc(m.name) + '</div><div class="nav-desc">' + esc(m.desc || '') + '</div></div>' +
         (m.custom ? '<button class="nav-del" data-del="' + m.id + '">' + ico('i-close') + '</button>' : '') +
         '</div>').join('');
       $$('.nav-item', list).forEach(it => it.addEventListener('click', e => {
-        if (e.target.closest('.drag-handle') || e.target.closest('[data-del]') || e.target.closest('.nav-ico')) return;
+        if (e.target.closest('.drag-handle') || e.target.closest('[data-del]')) return;
         if (list.classList.contains('sorting')) return;
         App.go(it.dataset.id);
-      }));
-      $$('.nav-ico[data-ic-mid]', list).forEach(ic => ic.addEventListener('click', e => {
-        e.stopPropagation();
-        if (list.classList.contains('sorting')) return;
-        App.pickIconForModule(ic.dataset.icMid);
       }));
       $$('[data-del]', list).forEach(b => b.addEventListener('click', e => {
         e.stopPropagation();
@@ -172,7 +167,7 @@
         '<div class="fld"><div class="fld-l">睡眠标准</div><div class="hint">' + S.sleep.std.focus + ' 专注 · ' + S.sleep.std.bed + ' 上床 · ' + S.sleep.std.wake + ' 起床 · ' + S.sleep.std.redline + ' 熬夜红线</div>' +
         '<button class="btn full ghost sm" style="margin-top:8px" id="stSleep">前往早睡模块自定义</button></div>' +
         '<div class="fld"><div class="fld-l">专属图标</div><button class="btn full ghost sm" id="stIcons">管理 / 新增专属图标</button>' +
-        '<div class="fld-h">点击侧边栏任意模块的图标即可快速更换；此处可上传图片、粘贴 SVG 新增图标，或编辑内置图标图形。</div></div>' +
+        '<div class="fld-h">此处可上传图片、粘贴 SVG 新增图标，或编辑内置图标图形；点击图标即可指定给任意模块。模块的专属图标统一在这里更改。</div></div>' +
         this.syncSectionHTML(S) +
         '<div class="fld"><div class="fld-l">数据管理</div>' +
         '<div class="btn-row" style="margin-top:0"><button class="btn sm soft" id="stExport">导出备份</button><button class="btn sm soft" id="stImport">导入恢复</button></div>' +
@@ -255,28 +250,6 @@
             K.Sheet.confirm('清空全部数据', '此操作不可恢复，将删除所有打卡、记账、阅读与复盘记录。建议先导出备份。', () => {
               K.Store.reset(); location.reload();
             }, '确认清空');
-          });
-        }
-      });
-    },
-
-    /* ---------- 为单个模块挑选图标（侧边栏快捷入口） ---------- */
-    pickIconForModule(mid) {
-      const S = K.Store.data;
-      const mod = this.modules().find(m => m.id === mid);
-      if (!mod) return;
-      const current = (S.settings.moduleIcons && S.settings.moduleIcons[mid]) || mod.icon;
-      const body = '<div class="fld-h" style="margin-bottom:10px">为「' + esc(mod.name) + '」选择专属图标：</div>' +
-        '<div class="ic-grid" id="pmGrid">' + K.iconCellsHTML(current) + '</div>';
-      K.Sheet.open({
-        title: '更改模块图标', body: body, height: '72%',
-        onMount(a) {
-          const g = $('#pmGrid', a.el);
-          g.addEventListener('click', ev => {
-            const cell = ev.target.closest('.ic-cell'); if (!cell) return;
-            S.settings.moduleIcons[mid] = cell.dataset.ic;
-            K.Store.save(); K.injectIcons(); App.render(true); a.close();
-            K.Toast('已更新「' + mod.name + '」图标 ✦');
           });
         }
       });
